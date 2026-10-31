@@ -56,7 +56,7 @@ class BusinessBuyingTest extends TestCase
         $this->assertSame('pending', $profile->status);
         $this->assertSame(1, $profile->documents()->count());
 
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->admin()->create();
         $this->actingAs($admin)->get(route('admin.business.index'))->assertOk()->assertSee('Kamara Hardware');
         $this->post(route('admin.business.verify', $profile))->assertSessionHas('status');
         $this->assertTrue($user->fresh()->isVerifiedBusiness());

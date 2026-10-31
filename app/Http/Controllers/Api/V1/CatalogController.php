@@ -43,6 +43,8 @@ class CatalogController extends Controller
             'operators' => collect(Operator::cases())->map(fn (Operator $o): array => ['value' => $o->value, 'label' => $o->label()]),
             'sorts' => collect(SearchService::SORTS)->map(fn (string $label, string $value): array => ['value' => $value, 'label' => $label])->values(),
             'web_url' => url('/'),
+            // Map images for the app's address and nearby-shop maps (attribution: OpenStreetMap contributors).
+            'map_tiles' => config('services.maps.tiles'),
         ]);
     }
 

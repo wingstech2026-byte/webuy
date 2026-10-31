@@ -22,6 +22,9 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
     Route::get('/price-cuts/{priceCut:token}', [V1\PriceCutController::class, 'show'])->name('price-cuts.show');
     Route::get('/farm/friends/{code}', [V1\FarmController::class, 'friend'])->name('farm.friend');
 
+    // Shops near a point (only public shop locations; a home business shows its area, not its door)
+    Route::get('/geo/nearby', [V1\GeoController::class, 'nearby'])->middleware('throttle:60,1')->name('geo.nearby');
+
     // Group buying: public offers and group progress
     Route::get('/group-buys', [V1\GroupBuyController::class, 'index'])->name('group-buys.index');
     Route::get('/group-buys/{campaign}', [V1\GroupBuyController::class, 'show'])->whereNumber('campaign')->name('group-buys.show');
@@ -120,7 +123,6 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('/addresses', [V1\AddressController::class, 'store'])->middleware('throttle:30,1')->name('addresses.store');
         Route::put('/addresses/{address}', [V1\AddressController::class, 'update'])->middleware('throttle:30,1')->name('addresses.update');
         Route::delete('/addresses/{address}', [V1\AddressController::class, 'destroy'])->name('addresses.destroy');
-        Route::get('/geo/nearby', [V1\GeoController::class, 'nearby'])->middleware('throttle:60,1')->name('geo.nearby');
         Route::get('/geo/delivery/{seller:slug}', [V1\GeoController::class, 'delivery'])->middleware('throttle:60,1')->name('geo.delivery');
 
         // Group buying: start, join, my groups

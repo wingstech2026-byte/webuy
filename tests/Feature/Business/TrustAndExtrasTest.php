@@ -157,7 +157,7 @@ class TrustAndExtrasTest extends TestCase
 
         $this->postJson("/api/v1/global/orders/{$import->id}/balance", ['operator' => 'ORANGE', 'payer_phone' => '076111222'])->assertUnprocessable();
 
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->admin()->create();
         $this->actingAs($admin)->post(route('admin.global.orders.advance', $import), ['status' => 'completed'])->assertSessionHasErrors('general');
         $this->post(route('admin.global.orders.advance', $import), ['status' => 'at_port'])->assertSessionHas('status');
         $this->assertStringContainsString('At Freetown port', $this->sms->lastTo($buyer->phone));
@@ -183,7 +183,7 @@ class TrustAndExtrasTest extends TestCase
 
     public function test_every_new_admin_page_loads(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->admin()->create();
 
         foreach (['admin.business.index', 'admin.inspections.index', 'admin.global.index', 'admin.assistant.index'] as $route) {
             $this->actingAs($admin)->get(route($route))->assertOk();

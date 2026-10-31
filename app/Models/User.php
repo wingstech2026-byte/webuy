@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\AdminRole;
 use App\Enums\SellerStatus;
 use App\Support\PhoneNumber;
 use Database\Factories\UserFactory;
@@ -15,7 +16,8 @@ use Laravel\Sanctum\HasApiTokens;
 
 /**
  * Roles: every user is a buyer. A user with an approved Seller shop is also a seller.
- * Admins have is_admin = true.
+ * Admins have is_admin = true and an admin_role (see AdminRole / AdminAccess). The role is
+ * never mass assignable: it is only set by an owner on the Staff page.
  */
 class User extends Authenticatable
 {
@@ -30,6 +32,7 @@ class User extends Authenticatable
     {
         return [
             'is_admin' => 'boolean',
+            'admin_role' => AdminRole::class,
             'is_agent' => 'boolean',
             'last_login_at' => 'datetime',
             'chat_banned_at' => 'datetime',

@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\AdminRole;
 use App\Enums\CheckoutStatus;
 use App\Enums\DeliveryMethod;
 use App\Enums\Operator;
@@ -114,6 +115,7 @@ class DatabaseSeeder extends Seeder
             ['phone' => PhoneNumber::normalize(config('wibuy.admin.phone'))],
             ['name' => config('wibuy.admin.name'), 'is_admin' => true],
         );
+        $admin->forceFill(['admin_role' => AdminRole::Owner])->save();
 
         $categories = $this->categories();
         $sellers = $this->sellers();

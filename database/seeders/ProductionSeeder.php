@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\AdminRole;
 use App\Models\User;
 use App\Support\PhoneNumber;
 
@@ -17,6 +18,7 @@ class ProductionSeeder extends DatabaseSeeder
             ['phone' => PhoneNumber::normalize(config('wibuy.admin.phone'))],
             ['name' => config('wibuy.admin.name'), 'is_admin' => true],
         );
+        $admin->forceFill(['admin_role' => AdminRole::Owner])->save();
 
         $this->categories();
 

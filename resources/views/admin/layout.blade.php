@@ -23,8 +23,11 @@
             'admin.chat.*' => ['Reports', 'admin.chat.reports'],
             'admin.group-buys.*' => ['Group buys', 'admin.group-buys.index'],
             'admin.audit' => ['Audit log', 'admin.audit'],
+            'admin.staff.*' => ['Staff', 'admin.staff.index'],
             'admin.settings*' => ['Settings', 'admin.settings'],
         ];
+        // Only the pages this admin's role may open.
+        $tabs = array_filter($tabs, fn ($tab) => \App\Support\AdminAccess::allows(auth()->user(), $tab[1]));
     @endphp
 
     <nav class="-mx-4 mb-6 flex gap-1 overflow-x-auto px-4 pb-1" aria-label="Admin">

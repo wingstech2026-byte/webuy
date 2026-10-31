@@ -193,6 +193,9 @@ Route::middleware(['auth', 'seller'])->prefix('seller')->name('seller.')->group(
 Route::middleware(['auth', 'admin', 'audit'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', Admin\DashboardController::class)->name('dashboard');
     Route::get('/audit', [Admin\AuditLogController::class, 'index'])->name('audit');
+    Route::get('/staff', [Admin\StaffController::class, 'index'])->name('staff.index');
+    Route::post('/staff', [Admin\StaffController::class, 'store'])->name('staff.store');
+    Route::post('/staff/{user}/remove', [Admin\StaffController::class, 'remove'])->name('staff.remove');
     Route::get('/group-buys', [Admin\GroupBuyController::class, 'index'])->name('group-buys.index');
     Route::post('/group-buys/{groupBuyCampaign}/toggle', [Admin\GroupBuyController::class, 'toggle'])->name('group-buys.toggle');
 

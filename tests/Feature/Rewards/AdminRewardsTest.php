@@ -19,7 +19,7 @@ class AdminRewardsTest extends TestCase
 
     private function admin(): User
     {
-        return User::factory()->create(['is_admin' => true]);
+        return User::factory()->admin()->create();
     }
 
     public function test_every_rewards_page_loads_for_admins_only(): void

@@ -78,7 +78,7 @@ class GeolocationTest extends TestCase
 
     public function test_nearby_shops_are_sorted_by_distance_and_a_home_is_never_shown_exactly(): void
     {
-        Sanctum::actingAs($this->buyer());
+        // No login needed: browsing shops near a point is public.
         $far = $this->makeSeller();
         $this->shopAt($far, ['latitude' => self::LAT + 0.05]);
         $home = $this->makeSeller();

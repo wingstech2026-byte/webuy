@@ -99,7 +99,7 @@ class MilestoneInspectionTest extends TestCase
             ->assertUnprocessable()->assertJsonPath('message', 'Wait for the inspection report before paying the balance.');
 
         $agent = User::factory()->create(['is_agent' => true]);
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->admin()->create();
         $this->actingAs($admin)->post(route('admin.inspections.assign', $inspection), ['agent_id' => $agent->id])->assertSessionHas('status');
 
         $this->actingAs($agent)->get(route('agent.inspections.edit', $inspection))->assertOk();
@@ -124,7 +124,7 @@ class MilestoneInspectionTest extends TestCase
         $this->approveCharge($id);
 
         $dispute = app(DisputeService::class)->open($order->fresh(), $buyer, 'not_received', 'The seller never delivered the goods to me.');
-        app(DisputeService::class)->resolve($dispute, User::factory()->create(['is_admin' => true]), 'buyer', 'Seller did not deliver');
+        app(DisputeService::class)->resolve($dispute, User::factory()->admin()->create(), 'buyer', 'Seller did not deliver');
 
         $refunds = Payment::where('order_id', $order->id)->where('kind', 'refund')->orderBy('id')->get();
         $this->assertSame(['900.00', '2100.00'], $refunds->pluck('amount')->map(fn ($a) => (string) $a)->all());
