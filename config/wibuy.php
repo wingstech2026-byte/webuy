@@ -34,6 +34,12 @@ return [
     'accept_within_hours' => (int) env('ACCEPT_WITHIN_HOURS', 24),
     // Days after "shipped"/"delivered" before an order completes by itself (if no dispute).
     'auto_complete_days' => (int) env('AUTO_COMPLETE_DAYS', 3),
+    // Returns: hours the seller has to answer, then days to confirm the item came back. Otherwise the
+    // WiBuy team decides.
+    'returns' => [
+        'respond_hours' => (int) env('RETURN_RESPOND_HOURS', 48),
+        'send_back_days' => (int) env('RETURN_SEND_BACK_DAYS', 7),
+    ],
 
     /*
     |--------------------------------------------------------------------------

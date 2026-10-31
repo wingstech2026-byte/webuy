@@ -72,6 +72,12 @@
                 </div>
             @endif
 
+            @if ($order->returnRequest)
+                @include('returns._panel', ['forSeller' => false])
+            @elseif ($order->status === OrderStatus::Delivered)
+                <a href="{{ route('returns.create', $order) }}" class="btn btn-outline">↩️ Return items</a>
+            @endif
+
             @if (in_array($order->status, OrderStatus::disputable(), true))
                 <a href="{{ route('disputes.create', $order) }}" class="btn btn-danger">Report a problem</a>
             @endif

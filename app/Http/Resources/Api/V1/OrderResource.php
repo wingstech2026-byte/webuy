@@ -5,6 +5,7 @@ namespace App\Http\Resources\Api\V1;
 use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\ReturnRequest;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -72,6 +73,19 @@ class OrderResource extends JsonResource
             ],
             'can_confirm_delivery' => $isBuyer && in_array($this->status, [OrderStatus::Shipped, OrderStatus::Delivered], true),
             'can_report_problem' => $isBuyer && in_array($this->status, OrderStatus::disputable(), true),
+            'can_return' => $isBuyer && $this->status === OrderStatus::Delivered && $this->returnRequest === null,
+            'return' => $this->returnRequest ? [
+                'id' => $this->returnRequest->id,
+                'status' => $this->returnRequest->status,
+                'status_label' => $this->returnRequest->statusLabel(),
+                'items' => $this->returnRequest->itemsLine(),
+                'reason' => ReturnRequest::REASONS[$this->returnRequest->reason] ?? $this->returnRequest->reason,
+                'refund_amount' => (string) $this->returnRequest->refund_amount,
+                'is_full' => $this->returnRequest->is_full,
+                'return_instructions' => $this->returnRequest->return_instructions,
+                'seller_note' => $this->returnRequest->seller_note,
+                'respond_by' => $this->returnRequest->respond_by?->toIso8601String(),
+            ] : null,
             'can_review' => $isBuyer && $this->status === OrderStatus::Completed
                 && ($this->relationLoaded('sellerReview') ? $this->sellerReview === null : true),
             // Disputes (with photos) are handled on the website for now.

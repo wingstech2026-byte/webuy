@@ -7,6 +7,7 @@ use App\Enums\PaymentKind;
 use App\Enums\PaymentStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Models\ReturnRequest;
 use App\Services\PaymentService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -42,7 +43,12 @@ class OrderController extends Controller
             return back()->withErrors(['general' => 'There is no failed refund to retry for this order.']);
         }
 
-        $payments->refundOrder($order, $order->refund_reason ?? 'Refund retried by an admin.');
+        // A refund for returned items is sent again for the same part, never as a full refund.
+        if ($last->payable instanceof ReturnRequest) {
+            $payments->refundPart($order, $last->payable, $order->refund_reason ?? 'Refund retried by an admin.');
+        } else {
+            $payments->refundOrder($order, $order->refund_reason ?? 'Refund retried by an admin.');
+        }
 
         return back()->with('status', 'Refund sent again.');
     }

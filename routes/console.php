@@ -7,6 +7,7 @@ Schedule::command('wibuy:sync-payments')->everyFiveMinutes()->withoutOverlapping
 Schedule::command('wibuy:expire-groups')->everyMinute()->withoutOverlapping();               // group buys that did not fill in time: refund + restock
 Schedule::command('wibuy:cancel-unpaid')->everyFiveMinutes()->withoutOverlapping();       // checkouts not paid in 15 min
 Schedule::command('wibuy:refund-unaccepted')->everyFiveMinutes()->withoutOverlapping();   // paid, not accepted in 24 h
+Schedule::command('wibuy:returns-tick')->everyFiveMinutes()->withoutOverlapping();        // returns the seller left unanswered go to the WiBuy team
 Schedule::command('wibuy:complete-orders')->everyFiveMinutes()->withoutOverlapping();     // shipped/delivered 3 days, no dispute
 Schedule::command('wibuy:prune-otp')->daily();
 Schedule::command('wibuy:rewards-tick')->everyFiveMinutes()->withoutOverlapping();        // "Remind me" SMS for lightning deals, expiry

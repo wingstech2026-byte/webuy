@@ -31,6 +31,7 @@ class Order extends Model
             'commission_percent' => 'decimal:2',
             'total' => 'decimal:2',
             'discount' => 'decimal:2',
+            'returned_value' => 'decimal:2',
             'delivery_latitude' => 'decimal:6',
             'delivery_longitude' => 'decimal:6',
             'distance_km' => 'decimal:2',
@@ -130,6 +131,11 @@ class Order extends Model
     public function groupParticipant(): HasOne
     {
         return $this->hasOne(GroupBuyParticipant::class);
+    }
+
+    public function returnRequest(): HasOne
+    {
+        return $this->hasOne(ReturnRequest::class);
     }
 
     public function milestones(): HasMany

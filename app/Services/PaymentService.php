@@ -12,8 +12,10 @@ use App\Models\Order;
 use App\Models\OrderMilestone;
 use App\Models\Payment;
 use App\Models\Payout;
+use App\Models\ReturnRequest;
 use App\Payments\GatewayResult;
 use App\Payments\PaymentGateway;
+use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Throwable;
@@ -176,6 +178,49 @@ class PaymentService
         return $first;
     }
 
+    /**
+     * Send back part of an order (returned items) to the number that paid. One live refund per return:
+     * calling again does nothing unless the earlier one failed.
+     */
+    public function refundPart(Order $order, ReturnRequest $return, string $reason): ?Payment
+    {
+        $deposit = Payment::where('checkout_id', $order->checkout_id)
+            ->where('kind', PaymentKind::Deposit)->where('status', PaymentStatus::Completed)
+            ->latest('id')->first();
+
+        if (! $deposit || Money::isZero($return->refund_amount)) {
+            return null;
+        }
+
+        $live = Payment::where('kind', PaymentKind::Refund)
+            ->where('payable_type', $return->getMorphClass())->where('payable_id', $return->id)
+            ->whereIn('status', [PaymentStatus::Pending, PaymentStatus::Completed])->exists();
+
+        if ($live) {
+            return null;
+        }
+
+        $order->forceFill(['refund_reason' => $reason])->save();
+
+        $refund = Payment::create([
+            'checkout_id' => $order->checkout_id,
+            'order_id' => $order->id,
+            'payable_type' => $return->getMorphClass(),
+            'payable_id' => $return->id,
+            'kind' => PaymentKind::Refund,
+            'provider' => $deposit->provider,
+            'provider_reference' => (string) Str::uuid(),
+            'phone' => $deposit->phone,
+            'operator' => $deposit->operator,
+            'amount' => $return->refund_amount,
+            'status' => PaymentStatus::Pending,
+        ]);
+
+        InitiatePaymentJob::dispatch($refund->id)->afterCommit();
+
+        return $refund;
+    }
+
     public function refundCheckout(Checkout $checkout, string $reason): void
     {
         Order::where('checkout_id', $checkout->id)->get()
@@ -288,7 +333,7 @@ class PaymentService
 
             match ($locked->kind) {
                 PaymentKind::Deposit => $this->applyDeposit($checkout, $result),
-                PaymentKind::Refund => $this->applyRefund($order, $result),
+                PaymentKind::Refund => $this->applyRefund($order, $result, $payment),
                 PaymentKind::Payout => $this->applyPayout($payout, $result),
                 PaymentKind::Membership => app(MembershipService::class)->settle($membership, $result->status === PaymentStatus::Completed),
                 PaymentKind::Charge => app(ChargeService::class)->settle($locked, $result->status === PaymentStatus::Completed),
@@ -313,8 +358,13 @@ class PaymentService
         $checkouts->cancelUnpaid($checkout);
     }
 
-    private function applyRefund(Order $order, GatewayResult $result): void
+    private function applyRefund(Order $order, GatewayResult $result, Payment $payment): void
     {
+        // A partial refund for returned items: the buyer kept the rest, so the order is not "refunded".
+        if ($payment->payable_type === (new ReturnRequest)->getMorphClass()) {
+            return;
+        }
+
         // A failed refund leaves the order as it is so an admin can retry it. Paid in parts: wait for every part.
         $partsLeft = Payment::where('order_id', $order->id)->where('kind', PaymentKind::Refund)
             ->where('status', PaymentStatus::Pending)->exists();

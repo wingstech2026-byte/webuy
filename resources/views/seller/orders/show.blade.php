@@ -42,6 +42,8 @@
                 <p class="text-sm text-stone-600">Mark it delivered. We ask the buyer to confirm; if they do nothing, you are paid automatically after {{ config('wibuy.auto_complete_days') }} days.</p>
                 <button class="btn btn-primary">Mark as delivered</button>
             </form>
+        @elseif ($order->status === OrderStatus::Returning && $order->returnRequest)
+            @include('returns._panel', ['forSeller' => true])
         @elseif ($order->status === OrderStatus::Delivered)
             <p class="card p-4 text-sm">Waiting for the buyer to confirm. It completes automatically {{ config('wibuy.auto_complete_days') }} days after delivery if nobody reports a problem.</p>
         @elseif ($order->status === OrderStatus::Disputed && $order->openDispute)

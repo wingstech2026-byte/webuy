@@ -16,6 +16,7 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PriceCutPageController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\Seller;
 use App\Http\Controllers\SellerApplicationController;
 use App\Http\Controllers\ShareLinkController;
@@ -104,6 +105,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/orders/{order}/review', [OrderController::class, 'review'])->name('orders.review');
     Route::get('/orders/{order}/problem', [DisputeController::class, 'create'])->name('disputes.create');
     Route::post('/orders/{order}/problem', [DisputeController::class, 'store'])->middleware('throttle:10,1')->name('disputes.store');
+    Route::get('/orders/{order}/return', [ReturnController::class, 'create'])->name('returns.create');
+    Route::post('/orders/{order}/return', [ReturnController::class, 'store'])->middleware('throttle:10,1')->name('returns.store');
     Route::get('/problems/{dispute}', [DisputeController::class, 'show'])->name('disputes.show');
 
     Route::get('/wishlist', [WishlistController::class, 'index'])->name('wishlist.index');
@@ -177,6 +180,11 @@ Route::middleware(['auth', 'seller'])->prefix('seller')->name('seller.')->group(
     Route::post('/promotions/trial-applications/{trialApplication}/select', [Seller\PromotionController::class, 'select'])->name('promotions.trials.select');
     Route::post('/promotions/trial-applications/{trialApplication}/reject', [Seller\PromotionController::class, 'reject'])->name('promotions.trials.reject');
     Route::post('/problems/{dispute}/respond', [Seller\DisputeController::class, 'respond'])->name('disputes.respond');
+
+    // Returns from buyers
+    Route::post('/returns/{returnRequest}/accept', [Seller\ReturnController::class, 'accept'])->name('returns.accept');
+    Route::post('/returns/{returnRequest}/refuse', [Seller\ReturnController::class, 'refuse'])->name('returns.refuse');
+    Route::post('/returns/{returnRequest}/received', [Seller\ReturnController::class, 'received'])->name('returns.received');
 
     // Shop locations on the map, delivery radius and pickup points
     Route::get('/locations', [Seller\LocationController::class, 'index'])->name('locations');

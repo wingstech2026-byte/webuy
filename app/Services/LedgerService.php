@@ -21,16 +21,26 @@ use Illuminate\Support\Facades\DB;
  */
 class LedgerService
 {
-    /** Credit a completed order: everything the buyer paid minus WiBuy's commission. Safe to call twice. */
+    /**
+     * Credit a completed order: everything the buyer paid minus WiBuy's commission. Goods the buyer
+     * returned (and got refunded) are left out, and the commission shrinks in proportion. Safe to call twice.
+     */
     public function creditSale(Order $order): ?LedgerEntry
     {
+        $kept = Money::sub($order->total, $order->returned_value ?? '0.00');
+        $commission = Money::isZero($order->total)
+            ? '0.00'
+            : bcdiv(bcmul((string) $order->commission, $kept, 6), (string) $order->total, 2);
+
         try {
             return DB::transaction(fn () => LedgerEntry::create([
                 'seller_id' => $order->seller_id,
                 'order_id' => $order->id,
                 'type' => LedgerType::Sale,
-                'amount' => Money::sub($order->total, $order->commission),
-                'description' => "Order {$order->number} completed",
+                'amount' => Money::sub($kept, $commission),
+                'description' => Money::isZero($order->returned_value ?? '0.00')
+                    ? "Order {$order->number} completed"
+                    : "Order {$order->number} completed (returned items left out)",
             ]));
         } catch (UniqueConstraintViolationException) {
             return null; // already credited
