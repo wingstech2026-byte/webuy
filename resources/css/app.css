@@ -1,0 +1,91 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+
+@theme {
+    /* System fonts only: no font download on slow, expensive mobile data. */
+    --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif,
+        'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
+
+    --color-brand-50: #f0fdf4;
+    --color-brand-100: #dcfce7;
+    --color-brand-200: #bbf7d0;
+    --color-brand-300: #86efac;
+    --color-brand-400: #4ade80;
+    --color-brand-500: #22c55e;
+    --color-brand-600: #16a34a;
+    --color-brand-700: #15803d;
+    --color-brand-800: #166534;
+    --color-brand-900: #14532d;
+}
+
+@layer base {
+    html {
+        -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+        @apply bg-stone-50 text-stone-900 antialiased;
+    }
+}
+
+@layer components {
+    .btn {
+        @apply inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-5 py-3 text-base font-bold transition focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300 disabled:cursor-not-allowed disabled:opacity-50;
+    }
+
+    .btn-primary {
+        @apply bg-brand-700 text-white hover:bg-brand-800 active:bg-brand-900;
+    }
+
+    .btn-outline {
+        @apply border-2 border-brand-700 bg-white text-brand-800 hover:bg-brand-50;
+    }
+
+    .btn-whatsapp {
+        @apply bg-[#25d366] text-stone-900 hover:brightness-95;
+    }
+
+    .btn-danger {
+        @apply border-2 border-red-200 bg-white text-red-700 hover:bg-red-50;
+    }
+
+    .btn-sm {
+        @apply min-h-10 w-auto px-4 py-2 text-sm;
+    }
+
+    .input {
+        @apply block min-h-12 w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-base shadow-sm focus:border-brand-600 focus:outline-none focus:ring-4 focus:ring-brand-200;
+    }
+
+    .label {
+        @apply mb-1 block text-sm font-semibold text-stone-700;
+    }
+
+    .card {
+        @apply rounded-2xl border border-stone-200 bg-white shadow-sm;
+    }
+
+    .badge {
+        @apply inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold;
+    }
+
+    .field-error {
+        @apply mt-1 text-sm font-medium text-red-700;
+    }
+
+    .choice {
+        @apply flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border-2 border-stone-200 bg-white px-4 py-3 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50;
+    }
+
+    .th {
+        @apply px-3 py-2 text-left text-xs font-bold uppercase tracking-wide text-stone-500;
+    }
+
+    .td {
+        @apply px-3 py-3 align-top text-sm;
+    }
+}

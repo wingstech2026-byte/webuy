@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>app</directory>
+        </include>
+    </source>
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file"/>
+        <env name="BCRYPT_ROUNDS" value="4"/>
+        <env name="BROADCAST_CONNECTION" value="null"/>
+        <env name="CACHE_STORE" value="array"/>
+        <env name="DB_CONNECTION" value="sqlite"/>
+        <env name="DB_DATABASE" value=":memory:"/>
+        <env name="DB_URL" value=""/>
+        <env name="MAIL_MAILER" value="array"/>
+        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="SESSION_DRIVER" value="array"/>
+        <env name="CHAT_DIRECT_ENABLED" value="false"/>
+        <env name="CHAT_PAGE_SIZE" value="30"/>
+        <env name="CHAT_MAX_PER_MINUTE" value="20"/>
+        <env name="CHAT_MAX_LENGTH" value="1000"/>
+        <env name="CHAT_SMS_COOLDOWN_MINUTES" value="60"/>
+        <env name="REVERB_APP_ID" value="test-app"/>
+        <env name="REVERB_APP_KEY" value="test-key"/>
+        <env name="REVERB_APP_SECRET" value="test-secret"/>
+        <env name="OTP_LENGTH" value="6"/>
+        <env name="OTP_TTL_MINUTES" value="10"/>
+        <env name="OTP_MAX_ATTEMPTS" value="5"/>
+        <env name="OTP_MAX_SENDS_PER_HOUR" value="5"/>
+        <env name="ORDER_HOLD_MINUTES" value="15"/>
+        <env name="PAYMENT_GATEWAY" value="fake"/>
+        <env name="PAWAPAY_BASE_URL" value="https://api.sandbox.pawapay.io"/>
+        <env name="PAWAPAY_API_TOKEN" value="test-token"/>
+        <env name="SMS_SENDER_ID" value="WIBUY"/>
+        <env name="SMS_DRIVER" value="log"/>
+        <env name="TRUSTED_PROXIES" value=""/>
+        <env name="PULSE_ENABLED" value="false"/>
+        <env name="TELESCOPE_ENABLED" value="false"/>
+        <env name="NIGHTWATCH_ENABLED" value="false"/>
+    </php>
+</phpunit>
