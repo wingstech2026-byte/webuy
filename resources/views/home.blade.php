@@ -38,6 +38,23 @@
         </section>
     @endif
 
+    <a href="{{ route('group-buys.index') }}" class="card mb-6 flex items-center justify-between gap-3 bg-brand-700 p-4 text-white">
+        <span><strong class="text-lg">👥 Buy together, pay less</strong><br><span class="text-sm text-white/80">Group prices when enough people buy. Money back if the group does not fill.</span></span>
+        <span aria-hidden="true">&rarr;</span>
+    </a>
+
+    @if ($recent->isNotEmpty())
+        <section class="mb-8" aria-labelledby="recent">
+            <div class="mb-3 flex items-center justify-between">
+                <h2 id="recent" class="text-lg font-extrabold">Recently viewed</h2>
+                <a href="{{ route('compare.index') }}" class="text-sm font-semibold text-brand-700">Compare &rarr;</a>
+            </div>
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                @foreach ($recent->take(4) as $product) <x-product-card :product="$product" /> @endforeach
+            </div>
+        </section>
+    @endif
+
     @if ($featured->isNotEmpty())
         <section class="mb-8" aria-labelledby="featured">
             <h2 id="featured" class="mb-3 text-lg font-extrabold">Featured</h2>

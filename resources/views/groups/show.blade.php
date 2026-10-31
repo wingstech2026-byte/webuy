@@ -24,7 +24,15 @@
         </div>
 
         @if ($info['status'] === 'open')
-            <a class="btn btn-primary w-full text-lg" href="{{ route('app.get', ['path' => '/groups/'.$group->token]) }}">Join in the WiBuy app</a>
+            @if (in_array($info['my_status'], ['paid', 'pending'], true))
+                <p class="card p-4 font-semibold">{{ $info['my_status'] === 'paid' ? 'You are in this group ✓. Share the link so it fills up faster.' : 'Your place is waiting for your payment.' }}</p>
+            @elseif (auth()->check())
+                <div class="card p-4">@include('groups._join-form', ['campaign' => $group->campaign, 'group' => $group])</div>
+            @else
+                <a class="btn btn-primary w-full text-lg" href="{{ route('login') }}">Log in to join</a>
+            @endif
+            <a class="btn btn-whatsapp w-full" target="_blank" rel="noopener" href="https://wa.me/?text={{ rawurlencode('Join my WiBuy group: '.$product->title.' for '.money($info['group_price']).' each. '.$info['share_url']) }}">Invite friends on WhatsApp</a>
+            <a class="btn btn-outline w-full" href="{{ route('app.get', ['path' => '/groups/'.$group->token]) }}">Open in the WiBuy app</a>
         @endif
         <a class="btn btn-outline w-full" href="{{ route('products.show', $product) }}">See the product</a>
     </div>

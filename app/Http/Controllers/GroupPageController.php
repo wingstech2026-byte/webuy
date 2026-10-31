@@ -14,6 +14,11 @@ class GroupPageController extends Controller
     {
         $group->load('campaign.product.images', 'campaign.product.seller', 'campaign.collectionPoint');
 
+        // A guest who taps "Log in to join" comes back to this group.
+        if (! $request->user()) {
+            $request->session()->put('url.intended', $request->fullUrl());
+        }
+
         return view('groups.show', ['group' => $group, 'info' => $groups->present($group, $request->user())]);
     }
 }

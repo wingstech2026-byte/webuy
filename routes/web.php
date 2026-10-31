@@ -8,9 +8,11 @@ use App\Http\Controllers\BusinessAccountController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\CheckoutController;
+use App\Http\Controllers\CompareController;
 use App\Http\Controllers\DisputeController;
 use App\Http\Controllers\FakePaymentController;
 use App\Http\Controllers\FarmPageController;
+use App\Http\Controllers\GroupBuyPageController;
 use App\Http\Controllers\GroupPageController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\OrderController;
@@ -65,6 +67,10 @@ Route::get('/showcase', function () {
 
 // ---- Shared links (WhatsApp): referrals, price cuts, WiBuy Farm, "Get the app" ----------------
 Route::get('/s/{share:token}', [ShareLinkController::class, 'open'])->name('share.open');
+Route::get('/compare', [CompareController::class, 'index'])->name('compare.index');
+Route::post('/compare/clear', [CompareController::class, 'clear'])->name('compare.clear');
+Route::post('/compare/{product:slug}', [CompareController::class, 'toggle'])->middleware('throttle:60,1')->name('compare.toggle');
+Route::get('/group-buys', [GroupBuyPageController::class, 'index'])->name('group-buys.index');
 Route::get('/g/{group:token}', [GroupPageController::class, 'show'])->name('groups.show');
 Route::get('/get-app', [ShareLinkController::class, 'getApp'])->middleware('throttle:30,1')->name('app.get');
 Route::get('/cut/{priceCut:token}', [PriceCutPageController::class, 'show'])->name('price-cuts.show');
@@ -105,6 +111,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/orders/{order}/review', [OrderController::class, 'review'])->name('orders.review');
     Route::get('/orders/{order}/problem', [DisputeController::class, 'create'])->name('disputes.create');
     Route::post('/orders/{order}/problem', [DisputeController::class, 'store'])->middleware('throttle:10,1')->name('disputes.store');
+    Route::post('/group-buys/{campaign}/start', [GroupBuyPageController::class, 'start'])->whereNumber('campaign')->middleware('throttle:checkout')->name('group-buys.start');
+    Route::post('/g/{group:token}/join', [GroupBuyPageController::class, 'join'])->middleware('throttle:checkout')->name('groups.join');
     Route::get('/orders/{order}/return', [ReturnController::class, 'create'])->name('returns.create');
     Route::post('/orders/{order}/return', [ReturnController::class, 'store'])->middleware('throttle:10,1')->name('returns.store');
     Route::get('/problems/{dispute}', [DisputeController::class, 'show'])->name('disputes.show');
@@ -150,6 +158,10 @@ Route::middleware('auth')->group(function () {
 Route::middleware(['auth', 'seller'])->prefix('seller')->name('seller.')->group(function () {
     Route::get('/', Seller\DashboardController::class)->name('dashboard');
 
+    // Many products at once from a spreadsheet (CSV)
+    Route::get('/products/import', [Seller\ProductImportController::class, 'create'])->name('products.import');
+    Route::get('/products/import/example.csv', [Seller\ProductImportController::class, 'template'])->name('products.import.template');
+    Route::post('/products/import', [Seller\ProductImportController::class, 'store'])->middleware('throttle:10,1')->name('products.import.store');
     Route::resource('products', Seller\ProductController::class)->except('show');
 
     Route::get('/orders', [Seller\OrderController::class, 'index'])->name('orders.index');

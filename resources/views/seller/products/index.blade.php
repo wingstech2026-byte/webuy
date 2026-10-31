@@ -4,6 +4,7 @@
     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h1 class="text-2xl font-extrabold">Products</h1>
         <a href="{{ route('seller.products.create') }}" class="btn btn-primary btn-sm">Add product</a>
+        <a href="{{ route('seller.products.import') }}" class="btn btn-outline btn-sm">Add many (spreadsheet)</a>
     </div>
 
     <form method="GET" class="mb-4 flex gap-2">

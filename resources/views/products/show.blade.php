@@ -158,9 +158,36 @@
                 @endif
             </div>
 
+            @if ($groupOffer && $product->isListed())
+                <div id="buy-together" class="card space-y-3 border-brand-200 bg-brand-50 p-4">
+                    <p class="text-lg font-extrabold">👥 Buy together: {{ money($groupOffer->group_price) }} each</p>
+                    <p class="text-sm text-stone-700">Instead of {{ money($product->price) }}, when {{ $groupOffer->min_group_size }} people each buy and pay within {{ $groupOffer->hours }} hours. If the group does not fill up, everyone is refunded.</p>
+                    @foreach ($openGroups as $g)
+                        <a href="{{ route('groups.show', $g) }}" class="flex justify-between rounded-lg bg-white p-2 text-sm ring-1 ring-brand-200">
+                            <span>{{ $g->leader->first_name }}'s group: {{ max(0, $groupOffer->min_group_size - $g->paid_count) }} more needed</span>
+                            <span class="font-semibold text-brand-700">Join &rarr;</span>
+                        </a>
+                    @endforeach
+                    @auth
+                        @if (auth()->id() !== $product->seller->user_id)
+                            <details @if ($errors->has('general') || old('recipient_name')) open @endif>
+                                <summary class="btn btn-primary btn-sm cursor-pointer">Start my own group</summary>
+                                <div class="mt-3">@include('groups._join-form', ['campaign' => $groupOffer->setRelation('product', $product), 'group' => null])</div>
+                            </details>
+                        @endif
+                    @else
+                        <a href="{{ route('login') }}" class="btn btn-primary btn-sm">Log in to start a group</a>
+                    @endauth
+                </div>
+            @endif
+
             <div class="grid gap-2 sm:grid-cols-3">
                 <a href="{{ $whatsappUrl }}" target="_blank" rel="noopener" class="btn btn-whatsapp btn-sm w-full">Share on WhatsApp</a>
                 <a href="{{ route('products.ask', $product) }}" class="btn btn-outline btn-sm w-full">Ask the seller</a>
+                <form method="POST" action="{{ route('compare.toggle', $product) }}">
+                    @csrf
+                    <button class="btn btn-outline btn-sm w-full">{{ $comparing ? '⚖️ In compare (remove)' : '⚖️ Compare' }}</button>
+                </form>
                 @auth
                     <form method="POST" action="{{ route('wishlist.toggle', $product) }}">
                         @csrf
@@ -214,6 +241,17 @@
                 @foreach ($more as $item)
                     <x-product-card :product="$item" />
                 @endforeach
+            </div>
+        </section>
+    @endif
+    @if ($recent->isNotEmpty())
+        <section class="mt-8" aria-labelledby="recent">
+            <div class="mb-3 flex items-center justify-between">
+                <h2 id="recent" class="text-lg font-extrabold">You looked at</h2>
+                <a href="{{ route('compare.index') }}" class="text-sm font-semibold text-brand-700">Compare &rarr;</a>
+            </div>
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                @foreach ($recent->take(4) as $item) <x-product-card :product="$item" /> @endforeach
             </div>
         </section>
     @endif
