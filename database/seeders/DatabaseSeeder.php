@@ -127,7 +127,7 @@ class DatabaseSeeder extends Seeder
     }
 
     /** @return array<string, Category> subcategory name => category */
-    private function categories(): array
+    protected function categories(): array
     {
         $byName = [];
 
