@@ -26,6 +26,7 @@ class OrderService
         private SmsService $sms,
         private LedgerService $ledger,
         private PaymentService $payments,
+        private StockService $stock,
     ) {}
 
     /** Seller accepts a paid order (before the deadline). */
@@ -262,10 +263,7 @@ class OrderService
             return;
         }
 
-        $quantities = $order->items()->get()->groupBy('product_id')->map(fn ($items) => (int) $items->sum('quantity'));
-
-        Product::whereIn('id', $quantities->keys())->orderBy('id')->lockForUpdate()->get()
-            ->each(fn (Product $product) => $product->increment('stock', $quantities[$product->id]));
+        $this->stock->release($this->stock->linesOf($order->items()->get()));
 
         $order->forceFill(['stock_reserved' => false])->save();
     }

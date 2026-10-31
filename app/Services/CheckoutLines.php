@@ -20,33 +20,36 @@ class CheckoutLines
      *
      * @throws MarketplaceException
      */
-    public function resolve(User $user, ?string $productSlug = null, ?int $quantity = null, bool $sample = false): array
+    public function resolve(User $user, ?string $productSlug = null, ?int $quantity = null, bool $sample = false, ?int $variantId = null): array
     {
         if ($sample) {
-            $product = Product::where('slug', (string) $productSlug)->with(['seller.deliveryAreas', 'tiers', 'images'])->first();
+            $product = Product::where('slug', (string) $productSlug)->with(['seller.deliveryAreas', 'tiers', 'images', 'variants'])->first();
 
             if (! $product || ! $product->isListed() || $product->sample_price === null) {
                 throw new MarketplaceException('This product has no sample.');
             }
 
+            $variant = $this->cart->variantFor($product, $variantId);
+
             // One unit at the sample price; the minimum order does not apply to samples.
-            return [collect([['product' => $product, 'quantity' => 1, 'unit_price' => (string) $product->sample_price, 'is_sample' => true]]), 'buy'];
+            return [collect([['product' => $product, 'variant' => $variant, 'quantity' => 1, 'unit_price' => (string) $product->sample_price, 'is_sample' => true]]), 'buy'];
         }
 
         if (filled($productSlug)) {
-            $product = Product::where('slug', $productSlug)->with(['seller.deliveryAreas', 'tiers', 'images'])->first();
+            $product = Product::where('slug', $productSlug)->with(['seller.deliveryAreas', 'tiers', 'images', 'variants'])->first();
 
             if (! $product || ! $product->isListed()) {
                 throw new MarketplaceException('That product is not available.');
             }
 
             $quantity = max(1, (int) ($quantity ?? 1));
+            $variant = $this->cart->variantFor($product, $variantId);
 
-            if ($problem = $this->cart->problemFor($product, $quantity)) {
+            if ($problem = $this->cart->problemFor($product, $quantity, $variant)) {
                 throw new MarketplaceException("{$product->title}: {$problem}.");
             }
 
-            return [collect([['product' => $product, 'quantity' => $quantity]]), 'buy'];
+            return [collect([['product' => $product, 'variant' => $variant, 'quantity' => $quantity]]), 'buy'];
         }
 
         $lines = $this->cart->lines($user);
@@ -59,6 +62,6 @@ class CheckoutLines
             throw new MarketplaceException("{$bad['product']->title}: {$bad['problem']}. Please fix your cart first.");
         }
 
-        return [$lines->map(fn (array $line): array => ['product' => $line['product'], 'quantity' => $line['quantity']])->values(), 'cart'];
+        return [$lines->map(fn (array $line): array => ['product' => $line['product'], 'variant' => $line['variant'], 'quantity' => $line['quantity']])->values(), 'cart'];
     }
 }

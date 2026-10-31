@@ -69,7 +69,7 @@ class CheckoutController extends Controller
 
             $checkout = $this->checkouts->place(
                 $user,
-                $lines->map(fn ($line) => ['product_id' => $line['product']->id, 'quantity' => $line['quantity']])->all(),
+                $lines->map(fn ($line) => ['product_id' => $line['product']->id, 'variant_id' => $line['variant']?->id, 'quantity' => $line['quantity']])->all(),
                 [
                     'name' => $data['recipient_name'],
                     'phone' => $data['recipient_phone'],
@@ -143,6 +143,8 @@ class CheckoutController extends Controller
             $user,
             $isBuyNow ? (string) $request->input('product') : null,
             $isBuyNow ? (int) $request->input('qty', 1) : null,
+            false,
+            $isBuyNow && $request->filled('variant') ? $request->integer('variant') : null,
         );
     }
 }

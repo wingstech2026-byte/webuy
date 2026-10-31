@@ -131,7 +131,7 @@
                     @if ($item->thumb_url)
                         <img src="{{ $item->thumb_url }}" alt="" loading="lazy" class="size-12 shrink-0 rounded-lg object-cover">
                     @endif
-                    <span class="flex-1">{{ $item->quantity }} &times; {{ $item->title }} <span class="text-stone-500">@ {{ money($item->unit_price) }}</span></span>
+                    <span class="flex-1">{{ $item->quantity }} &times; {{ $item->display_title }} <span class="text-stone-500">@ {{ money($item->unit_price) }}</span></span>
                     <strong>{{ money($item->line_total) }}</strong>
                 </div>
             @endforeach

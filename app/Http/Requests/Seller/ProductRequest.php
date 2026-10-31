@@ -26,7 +26,12 @@ class ProductRequest extends FormRequest
             ->filter(fn ($t) => is_array($t) && (filled($t['min_quantity'] ?? null) || filled($t['unit_price'] ?? null)))
             ->values()->all();
 
-        $this->merge(['tiers' => $tiers]);
+        // Blank option rows too; a row with a name is kept.
+        $variants = collect($this->input('variants', []))
+            ->filter(fn ($v) => is_array($v) && filled($v['name'] ?? null))
+            ->values()->all();
+
+        $this->merge(['tiers' => $tiers, 'variants' => $variants]);
     }
 
     public function rules(): array
@@ -51,6 +56,13 @@ class ProductRequest extends FormRequest
             'tiers.*.business_only' => ['nullable', 'boolean'],
             'lead_time_days' => ['nullable', 'integer', 'min:1', 'max:365'],
             'sample_price' => ['nullable', 'decimal:0,2', 'min:0.01'],
+
+            // Options such as size or colour, each with its own stock (and price, if different).
+            'variants' => ['array', 'max:30'],
+            'variants.*.id' => ['nullable', 'integer'],
+            'variants.*.name' => ['required', 'string', 'max:80', 'distinct:ignore_case'],
+            'variants.*.price' => ['nullable', 'decimal:0,2', 'min:0.01', 'max:99999999'],
+            'variants.*.stock' => ['required', 'integer', 'min:0', 'max:10000000'],
 
             'images' => ['nullable', 'array', 'max:'.config('wibuy.max_product_images')],
             'images.*' => $this->imageRules(),
@@ -98,6 +110,17 @@ class ProductRequest extends FormRequest
             ->sortBy('min_quantity')->values()->all();
     }
 
+    /** @return list<array{id: ?int, name: string, price: ?string, stock: int}> option rows, in form order */
+    public function variants(): array
+    {
+        return collect($this->validated('variants', []))->map(fn ($v) => [
+            'id' => isset($v['id']) ? (int) $v['id'] : null,
+            'name' => trim($v['name']),
+            'price' => filled($v['price'] ?? null) ? Money::from($v['price']) : null,
+            'stock' => (int) $v['stock'],
+        ])->values()->all();
+    }
+
     public function productData(): array
     {
         return collect($this->validated())->only([
@@ -116,6 +139,8 @@ class ProductRequest extends FormRequest
             'member_price.lt' => 'The WiBuy Pass price must be lower than the normal price.',
             'images.max' => 'A product can have up to '.config('wibuy.max_product_images').' pictures.',
             'tiers.*.min_quantity.min' => 'A wholesale tier starts at 2 units or more.',
+            'variants.*.name.distinct' => 'Each option needs a different name.',
+            'variants.*.stock.required' => 'Enter how many you have of each option.',
         ] + $this->imageMessages('images.*', 'picture');
     }
 }

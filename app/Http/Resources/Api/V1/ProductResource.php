@@ -58,6 +58,13 @@ class ProductResource extends JsonResource
                 'unit_price' => (string) $tier->unit_price,
             ])->values(),
             'seller' => new SellerResource($this->whenLoaded('seller')),
+            // Options such as size or colour; the buyer must pick one when the list is not empty.
+            'variants' => $this->whenLoaded('variants', fn () => $this->variants->where('is_active', true)->map(fn ($variant): array => [
+                'id' => $variant->id,
+                'name' => $variant->name,
+                'price' => $variant->price !== null ? (string) $variant->price : null,
+                'stock' => $variant->stock,
+            ])->values()),
             'web_url' => route('products.show', $this->resource),
             'member_price' => $this->member_price !== null ? (string) $this->member_price : null,
             'has_business_prices' => $allTiers->contains('business_only', true),

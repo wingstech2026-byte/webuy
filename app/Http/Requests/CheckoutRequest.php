@@ -28,6 +28,7 @@ class CheckoutRequest extends FormRequest
             'source' => ['required', Rule::in(['cart', 'buy'])],
             'product' => ['nullable', 'string', 'max:120'],
             'qty' => ['nullable', 'integer', 'min:1'],
+            'variant' => ['nullable', 'integer'],
 
             'address_id' => ['nullable', 'integer'],
             'recipient_name' => ['required_without:address_id', 'nullable', 'string', 'max:80'],

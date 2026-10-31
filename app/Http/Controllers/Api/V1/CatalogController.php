@@ -76,7 +76,7 @@ class CatalogController extends Controller
     {
         abort_unless($product->isListed(), 404);
 
-        $product->load(['seller.logo', 'category', 'images', 'tiers']);
+        $product->load(['seller.logo', 'category', 'images', 'tiers', 'variants']);
 
         return response()->json([
             'data' => (new ProductResource($product))->detailed(),

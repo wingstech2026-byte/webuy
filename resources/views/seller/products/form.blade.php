@@ -6,6 +6,10 @@
         // Always offer a few empty tier rows; blank rows are ignored.
         $tiers = array_pad(array_values($tiers), max(3, count($tiers) + 1), ['min_quantity' => '', 'unit_price' => '']);
         $images = $item->exists ? $item->images : collect();
+        // Options (size, colour...): the saved active ones, plus empty rows to add more.
+        $variantRows = old('variants', $item->exists ? $item->variants->where('is_active', true)->map(fn ($v) => ['id' => $v->id, 'name' => $v->name, 'price' => $v->price, 'stock' => $v->stock])->values()->all() : []);
+        $hasVariants = count($variantRows) > 0;
+        $variantRows = array_pad(array_values($variantRows), max(3, count($variantRows) + 2), ['id' => null, 'name' => '', 'price' => '', 'stock' => '']);
     @endphp
 
     <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -80,6 +84,7 @@
                     <div>
                         <label for="stock" class="label">Units in stock</label>
                         <input id="stock" name="stock" type="number" min="0" inputmode="numeric" required class="input" value="{{ old('stock', $item->stock) }}">
+                        @if ($hasVariants) <p class="text-xs text-stone-500">With options below, this is the total of all options.</p> @endif
                         @error('stock') <p class="field-error">{{ $message }}</p> @enderror
                     </div>
                     <div>
@@ -118,6 +123,32 @@
                             <input type="checkbox" name="tiers[{{ $i }}][business_only]" value="1" class="size-4 accent-brand-700" @checked(! empty($tier['business_only']))>
                             Only for verified business buyers
                         </label>
+                    </div>
+                @endforeach
+            </div>
+
+            <div class="card space-y-3 p-5">
+                <h2 class="font-bold">Options: sizes, colours… (optional)</h2>
+                <p class="text-sm text-stone-600">One line per option, like "Red, XL" or "64GB". Each has its own stock. Leave the price empty to use the product's price. Buyers must choose one. Empty a name to remove that option.</p>
+                @error('variants') <p class="field-error">{{ $message }}</p> @enderror
+                @foreach ($variantRows as $i => $row)
+                    <div class="grid grid-cols-3 gap-2">
+                        <input type="hidden" name="variants[{{ $i }}][id]" value="{{ $row['id'] }}">
+                        <div>
+                            <label class="label" for="variant-n-{{ $i }}">Option</label>
+                            <input id="variant-n-{{ $i }}" name="variants[{{ $i }}][name]" maxlength="80" class="input" value="{{ $row['name'] }}" placeholder="{{ $i === 0 ? 'Red, XL' : '' }}">
+                            @error("variants.$i.name") <p class="field-error">{{ $message }}</p> @enderror
+                        </div>
+                        <div>
+                            <label class="label" for="variant-s-{{ $i }}">In stock</label>
+                            <input id="variant-s-{{ $i }}" name="variants[{{ $i }}][stock]" type="number" min="0" inputmode="numeric" class="input" value="{{ $row['stock'] }}">
+                            @error("variants.$i.stock") <p class="field-error">{{ $message }}</p> @enderror
+                        </div>
+                        <div>
+                            <label class="label" for="variant-p-{{ $i }}">Price (Le, optional)</label>
+                            <input id="variant-p-{{ $i }}" name="variants[{{ $i }}][price]" type="number" step="0.01" min="0.01" inputmode="decimal" class="input" value="{{ $row['price'] }}">
+                            @error("variants.$i.price") <p class="field-error">{{ $message }}</p> @enderror
+                        </div>
                     </div>
                 @endforeach
             </div>

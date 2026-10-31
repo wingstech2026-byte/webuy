@@ -22,7 +22,7 @@ class CartController extends Controller
         // Per seller: the items and their subtotal (delivery is added at checkout).
         $groups = $lines->groupBy(fn ($line) => $line['product']->seller_id)->map(function ($sellerLines) {
             $sellerLines = $sellerLines->map(function ($line) {
-                $unit = $line['product']->unitPriceFor($line['quantity']);
+                $unit = $line['variant']?->price !== null ? Money::from($line['variant']->price) : $line['product']->unitPriceFor($line['quantity']);
 
                 return $line + ['unit_price' => $unit, 'line_total' => Money::mul($unit, $line['quantity'])];
             });
@@ -45,6 +45,7 @@ class CartController extends Controller
     public function store(AddToCartRequest $request, Product $product): RedirectResponse
     {
         $quantity = (int) $request->validated('quantity');
+        $variantId = $request->validated('variant') !== null ? (int) $request->validated('variant') : null;
 
         try {
             if ($request->boolean('buy_now')) {
@@ -63,10 +64,16 @@ class CartController extends Controller
                     throw new MarketplaceException($product->stock > 0 ? "Only {$product->stock} left." : 'This product is out of stock.');
                 }
 
-                return redirect()->route('checkout.show', ['product' => $product->slug, 'qty' => $quantity]);
+                $variant = $this->cart->variantFor($product, $variantId);
+
+                if ($problem = $this->cart->problemFor($product, $quantity, $variant)) {
+                    throw new MarketplaceException("{$product->title}: {$problem}.");
+                }
+
+                return redirect()->route('checkout.show', array_filter(['product' => $product->slug, 'qty' => $quantity, 'variant' => $variant?->id]));
             }
 
-            $this->cart->add($request->user(), $product, $quantity);
+            $this->cart->add($request->user(), $product, $quantity, $variantId);
         } catch (MarketplaceException $e) {
             return back()->withInput()->withErrors(['general' => $e->getMessage()]);
         }

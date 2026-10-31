@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Enums\OrderStatus;
 use App\Exceptions\MarketplaceException;
 use App\Models\Order;
-use App\Models\Product;
 use App\Models\ReturnRequest;
 use App\Models\User;
 use App\Support\Money;
@@ -30,6 +29,7 @@ class ReturnService
         private DisputeService $disputes,
         private ImageService $images,
         private SmsService $sms,
+        private StockService $stock,
     ) {}
 
     /**
@@ -139,9 +139,10 @@ class ReturnService
             $return->forceFill(['status' => ReturnRequest::RECEIVED, 'received_at' => now()])->save();
 
             $quantities = collect($return->items)->mapWithKeys(fn ($i) => [$i['order_item_id'] => $i['quantity']]);
-            $order->items->whereIn('id', $quantities->keys())->groupBy('product_id')
-                ->each(fn ($items, $productId) => Product::whereKey($productId)->lockForUpdate()->first()
-                    ?->increment('stock', $items->sum(fn ($item) => $quantities[$item->id])));
+            $this->stock->release($this->stock->linesOf(
+                $order->items->whereIn('id', $quantities->keys()),
+                fn ($item) => $quantities[$item->id],
+            ));
 
             // Everything came back: the whole payment is refunded and the seller gets nothing; the order
             // shows "Refunded" once the gateway confirms (PaymentService::applyRefund).

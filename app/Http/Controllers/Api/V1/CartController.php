@@ -25,7 +25,7 @@ class CartController extends Controller
 
     public function store(AddToCartRequest $request, Product $product): JsonResponse
     {
-        $this->cart->add($request->user(), $product, (int) $request->validated('quantity'));
+        $this->cart->add($request->user(), $product, (int) $request->validated('quantity'), $request->validated('variant') !== null ? (int) $request->validated('variant') : null);
 
         return response()->json($this->payload($request), 201);
     }

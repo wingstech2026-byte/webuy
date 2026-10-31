@@ -82,8 +82,13 @@ class Product extends Model
      * The price for this buyer: tiers, then a live lightning deal (up to its per-order limit), then the
      * WiBuy Pass member price, whichever is lowest.
      */
-    public function unitPriceForBuyer(int $quantity, bool $isMember = false, bool $isBusiness = false): string
+    public function unitPriceForBuyer(int $quantity, bool $isMember = false, bool $isBusiness = false, ?ProductVariant $variant = null): string
     {
+        // A variant with its own price is sold at exactly that price (bulk and member prices are the product's).
+        if ($variant?->price !== null) {
+            return Money::from($variant->price);
+        }
+
         $price = $this->unitPriceFor($quantity, $isBusiness);
         $deal = $this->liveFlashDeal();
 
@@ -101,6 +106,19 @@ class Product extends Model
     public function tiers(): HasMany
     {
         return $this->hasMany(PriceTier::class)->orderBy('min_quantity');
+    }
+
+    /** Options such as size or colour; when there are active ones, the buyer must pick one. */
+    public function variants(): HasMany
+    {
+        return $this->hasMany(ProductVariant::class)->orderBy('position')->orderBy('id');
+    }
+
+    public function hasVariants(): bool
+    {
+        return $this->relationLoaded('variants')
+            ? $this->variants->contains('is_active', true)
+            : $this->variants()->active()->exists();
     }
 
     public function reviews(): HasMany

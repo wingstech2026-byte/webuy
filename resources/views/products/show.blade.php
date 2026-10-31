@@ -125,6 +125,22 @@
                 @elseif ($product->isListed() && $product->stock > 0)
                     <form method="POST" action="{{ route('cart.add', $product) }}" class="mt-3 space-y-3">
                         @csrf
+                        @php($options = $product->variants->where('is_active', true))
+                        @if ($options->isNotEmpty())
+                            <fieldset>
+                                <legend class="label">Choose an option</legend>
+                                <div class="flex flex-wrap gap-2">
+                                    @foreach ($options as $option)
+                                        <label class="choice text-sm {{ $option->stock < 1 ? 'opacity-50' : '' }}">
+                                            <input type="radio" name="variant" value="{{ $option->id }}" required class="size-4 accent-brand-700" @disabled($option->stock < 1) @checked((int) old('variant') === $option->id)>
+                                            {{ $option->name }}@if ($option->price !== null) &middot; {{ money($option->price) }}@endif
+                                            <span class="text-stone-500">{{ $option->stock < 1 ? '(sold out)' : '('.$option->stock.' left)' }}</span>
+                                        </label>
+                                    @endforeach
+                                </div>
+                                @error('variant') <p class="field-error">{{ $message }}</p> @enderror
+                            </fieldset>
+                        @endif
                         <div>
                             <label for="quantity" class="label">How many?</label>
                             <input id="quantity" name="quantity" type="number" inputmode="numeric" min="{{ $product->min_order_quantity }}" max="{{ $product->stock }}"

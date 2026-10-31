@@ -55,7 +55,7 @@
         <div class="card divide-y divide-stone-100 text-sm">
             @foreach ($order->items as $item)
                 <div class="flex justify-between gap-3 p-4">
-                    <span>{{ $item->quantity }} &times; {{ $item->title }} <span class="text-stone-500">({{ $item->unit }}) @ {{ money($item->unit_price) }}</span></span>
+                    <span>{{ $item->quantity }} &times; {{ $item->display_title }} <span class="text-stone-500">({{ $item->unit }}) @ {{ money($item->unit_price) }}</span></span>
                     <strong>{{ money($item->line_total) }}</strong>
                 </div>
             @endforeach

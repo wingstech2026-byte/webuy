@@ -28,6 +28,7 @@
                                     <a href="{{ route('products.show', $product) }}"><x-product-image :product="$product" class="size-20 shrink-0 rounded-lg" /></a>
                                     <div class="min-w-0 flex-1">
                                         <a href="{{ route('products.show', $product) }}" class="line-clamp-2 font-semibold">{{ $product->title }}</a>
+                                        @if ($line['variant']) <p class="text-sm font-semibold text-brand-800">{{ $line['variant']->name }}</p> @endif
                                         <p class="text-sm text-stone-600">{{ money($line['unit_price']) }} per {{ $product->unit }}
                                             @if ($line['unit_price'] !== (string) $product->price) <span class="badge bg-amber-100 text-amber-800">wholesale price</span> @endif
                                         </p>

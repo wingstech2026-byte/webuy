@@ -14,7 +14,7 @@
 
         <div class="card divide-y divide-stone-100 text-sm">
             @foreach ($order->items as $item)
-                <div class="flex justify-between p-3"><span>{{ $item->quantity }} &times; {{ $item->title }} @ {{ money($item->unit_price) }}</span><strong>{{ money($item->line_total) }}</strong></div>
+                <div class="flex justify-between p-3"><span>{{ $item->quantity }} &times; {{ $item->display_title }} @ {{ money($item->unit_price) }}</span><strong>{{ money($item->line_total) }}</strong></div>
             @endforeach
             <div class="flex justify-between p-3"><span>Delivery ({{ $order->isPickup() ? 'pickup' : $order->district }})</span><span>{{ money($order->delivery_fee) }}</span></div>
             <div class="flex justify-between p-3"><span>Total</span><strong>{{ money($order->total) }}</strong></div>

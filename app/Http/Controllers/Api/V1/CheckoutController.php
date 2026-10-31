@@ -42,6 +42,7 @@ class CheckoutController extends Controller
         $data = $request->validate([
             'product' => ['nullable', 'string', 'max:120'],
             'qty' => ['nullable', 'integer', 'min:1'],
+            'variant' => ['nullable', 'integer'],
             'district' => ['nullable', Rule::in(config('wibuy.districts'))],
             'methods' => ['nullable', 'array'],
             'methods.*' => [Rule::enum(DeliveryMethod::class)],
@@ -52,7 +53,7 @@ class CheckoutController extends Controller
             'lng' => ['nullable', 'numeric', 'required_with:lat'],
         ]);
 
-        [$lines, $source] = $this->lines->resolve($request->user(), $data['product'] ?? null, $data['qty'] ?? null, (bool) ($data['sample'] ?? false));
+        [$lines, $source] = $this->lines->resolve($request->user(), $data['product'] ?? null, $data['qty'] ?? null, (bool) ($data['sample'] ?? false), $data['variant'] ?? null);
         $user = $request->user();
         $saved = isset($data['address_id']) ? SavedAddress::where('user_id', $user->id)->findOrFail($data['address_id']) : null;
         $district = $saved?->district ?? $data['district'] ?? 'Western Area Urban';
@@ -109,12 +110,13 @@ class CheckoutController extends Controller
         $isBuyNow = $data['source'] === 'buy';
         $user = $request->user();
 
-        [$lines, $source] = $this->lines->resolve($user, $isBuyNow ? ($data['product'] ?? '') : null, $isBuyNow ? ($data['qty'] ?? 1) : null, $isBuyNow && $request->boolean('sample'));
+        [$lines, $source] = $this->lines->resolve($user, $isBuyNow ? ($data['product'] ?? '') : null, $isBuyNow ? ($data['qty'] ?? 1) : null, $isBuyNow && $request->boolean('sample'), $isBuyNow ? ($data['variant'] ?? null) : null);
 
         $checkout = $this->checkouts->place(
             $user,
             $lines->map(fn (array $line): array => array_filter([
                 'product_id' => $line['product']->id,
+                'variant_id' => $line['variant']?->id,
                 'quantity' => $line['quantity'],
                 'unit_price' => $line['unit_price'] ?? null,
                 'is_sample' => $line['is_sample'] ?? null,

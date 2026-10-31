@@ -10,12 +10,13 @@ use App\Models\Category;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Services\ProductService;
+use App\Services\VariantService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
-    public function __construct(private ProductService $products) {}
+    public function __construct(private ProductService $products, private VariantService $variants) {}
 
     public function index(Request $request)
     {
@@ -41,6 +42,7 @@ class ProductController extends Controller
                 $request->tiers(),
                 $request->file('images', []),
             );
+            $this->variants->sync($product, $request->variants());
         } catch (MarketplaceException $e) {
             return back()->withInput()->withErrors(['general' => $e->getMessage()]);
         }
@@ -53,7 +55,7 @@ class ProductController extends Controller
     {
         $this->authorize('manage', $product);
 
-        return view('seller.products.form', $this->formData($product->load('tiers', 'images')));
+        return view('seller.products.form', $this->formData($product->load('tiers', 'images', 'variants')));
     }
 
     public function update(ProductRequest $request, Product $product): RedirectResponse
@@ -69,6 +71,7 @@ class ProductController extends Controller
                 array_map('intval', $request->input('remove_images', [])),
                 $product,
             );
+            $this->variants->sync($product, $request->variants());
         } catch (MarketplaceException $e) {
             return back()->withInput()->withErrors(['general' => $e->getMessage()]);
         }

@@ -93,6 +93,6 @@ class ReturnRequest extends Model
     {
         $titles = $this->order->items->keyBy('id');
 
-        return collect($this->items)->map(fn ($i) => $i['quantity'].' × '.($titles[$i['order_item_id']]->title ?? '?'))->implode(', ');
+        return collect($this->items)->map(fn ($i) => $i['quantity'].' × '.($titles[$i['order_item_id']]->display_title ?? '?'))->implode(', ');
     }
 }

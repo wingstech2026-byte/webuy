@@ -18,7 +18,7 @@ class ProductController extends Controller
             abort(404);
         }
 
-        $product->load(['seller.logo', 'category.parent', 'images', 'tiers']);
+        $product->load(['seller.logo', 'category.parent', 'images', 'tiers', 'variants']);
 
         // Guests who press "Add to cart" log in first and come back here.
         if (! $user) {

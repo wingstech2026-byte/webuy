@@ -15,6 +15,8 @@ class AddToCartRequest extends FormRequest
     {
         return [
             'quantity' => ['required', 'integer', 'min:1', 'max:'.config('wibuy.max_cart_quantity')],
+            // The chosen option (size, colour...) when the product has variants.
+            'variant' => ['nullable', 'integer'],
             'buy_now' => ['nullable', 'boolean'],
         ];
     }

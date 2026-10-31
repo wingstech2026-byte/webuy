@@ -35,4 +35,10 @@ class OrderItem extends Model
     {
         return $this->thumb_path ? Storage::disk(Image::DISK)->url($this->thumb_path) : null;
     }
+
+    /** "T-shirt (Red, XL)" when an option was chosen, else the title. */
+    public function getDisplayTitleAttribute(): string
+    {
+        return $this->variant_name ? "{$this->title} ({$this->variant_name})" : $this->title;
+    }
 }

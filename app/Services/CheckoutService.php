@@ -14,6 +14,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderMilestone;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\User;
 use App\Sms\SmsMessages;
 use App\Support\Money;
@@ -33,6 +34,7 @@ class CheckoutService
         private CouponService $coupons,
         private FlashDealService $flashDeals,
         private FarmService $farms,
+        private StockService $stock,
     ) {}
 
     /**
@@ -61,10 +63,11 @@ class CheckoutService
                 // verified businesses), a live lightning deal and the member price: whichever is lowest.
                 $unit = isset($line['unit_price'])
                     ? Money::from($line['unit_price'])
-                    : $line['product']->unitPriceForBuyer($line['quantity'], $isMember, $isBusiness);
+                    : $line['product']->unitPriceForBuyer($line['quantity'], $isMember, $isBusiness, $line['variant'] ?? null);
 
                 return [
                     'product' => $line['product'],
+                    'variant' => $line['variant'] ?? null,
                     'quantity' => $line['quantity'],
                     'is_sample' => (bool) ($line['is_sample'] ?? false),
                     'unit_price' => $unit,
@@ -199,7 +202,14 @@ class CheckoutService
      */
     public function place(User $buyer, array $lines, array $details, array $methods, Operator $operator, string $payerPhone, ?int $couponId = null, string $channel = 'web', array $options = []): Checkout
     {
-        $wanted = collect($lines)->groupBy('product_id')->map(fn ($rows) => (int) $rows->sum('quantity'));
+        // One line per product and option (variant): "Shirt, Red XL" and "Shirt, Blue M" are separate lines.
+        $wanted = collect($lines)
+            ->groupBy(fn ($line) => $line['product_id'].':'.($line['variant_id'] ?? ''))
+            ->map(fn ($rows) => [
+                'product_id' => (int) $rows->first()['product_id'],
+                'variant_id' => isset($rows->first()['variant_id']) ? (int) $rows->first()['variant_id'] : null,
+                'quantity' => (int) $rows->sum('quantity'),
+            ])->values();
         // Lines with a locked price (an accepted quote or a sample), keyed by product.
         $locked = collect($lines)->filter(fn ($line) => isset($line['unit_price']))->keyBy('product_id');
         $milestones = ($options['payment_plan'] ?? 'full') === 'milestones';
@@ -209,12 +219,15 @@ class CheckoutService
         }
 
         return DB::transaction(function () use ($buyer, $wanted, $locked, $milestones, $options, $details, $methods, $operator, $payerPhone, $couponId, $channel) {
-            $products = Product::whereIn('id', $wanted->keys())->orderBy('id')->lockForUpdate()
-                ->with(['seller.deliveryAreas', 'tiers', 'images'])->get()->keyBy('id');
+            $products = Product::whereIn('id', $wanted->pluck('product_id')->unique())->orderBy('id')->lockForUpdate()
+                ->with(['seller.deliveryAreas', 'tiers', 'images', 'variants'])->get()->keyBy('id');
+            $variants = ProductVariant::whereIn('id', $wanted->pluck('variant_id')->filter()->unique())->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            // The minimum order and the product's stock count every option of the product together.
+            $perProduct = $wanted->groupBy('product_id')->map(fn ($rows) => (int) $rows->sum('quantity'));
 
             $lines = collect();
 
-            foreach ($wanted as $productId => $quantity) {
+            foreach ($wanted as ['product_id' => $productId, 'variant_id' => $variantId, 'quantity' => $quantity]) {
                 $product = $products->get($productId);
 
                 if (! $product || ! $product->isListed()) {
@@ -233,11 +246,11 @@ class CheckoutService
 
                 $isGroup = (bool) ($locked[$productId]['is_group'] ?? false);
 
-                if (! $isSample && ! $isGroup && $quantity < $product->min_order_quantity) {
+                if (! $isSample && ! $isGroup && $perProduct[$productId] < $product->min_order_quantity) {
                     throw new MarketplaceException("The minimum order for {$product->title} is {$product->min_order_quantity} {$product->unit}.");
                 }
 
-                if ($quantity > $product->stock) {
+                if ($perProduct[$productId] > $product->stock) {
                     throw new MarketplaceException(
                         $product->stock > 0
                             ? "Only {$product->stock} left of {$product->title}."
@@ -245,8 +258,26 @@ class CheckoutService
                     );
                 }
 
+                $hasOptions = $product->variants->contains('is_active', true);
+                $variant = $variantId ? $variants->get($variantId) : null;
+
+                if ($hasOptions && (! $variant || $variant->product_id !== $product->id || ! $variant->is_active)) {
+                    throw new MarketplaceException("Choose an option for {$product->title} (size, colour...).");
+                }
+
+                if (! $hasOptions && $variantId) {
+                    throw new MarketplaceException("{$product->title} has no options to choose from.");
+                }
+
+                if ($variant && $quantity > $variant->stock) {
+                    throw new MarketplaceException($variant->stock > 0
+                        ? "Only {$variant->stock} left of {$product->title} ({$variant->name})."
+                        : "{$product->title} ({$variant->name}) is out of stock.");
+                }
+
                 $lines->push(array_filter([
                     'product' => $product,
+                    'variant' => $variant,
                     'quantity' => $quantity,
                     'unit_price' => $locked[$productId]['unit_price'] ?? null,
                     'is_sample' => $isSample ?: null,
@@ -336,7 +367,9 @@ class CheckoutService
                     OrderItem::create([
                         'order_id' => $order->id,
                         'product_id' => $product->id,
+                        'variant_id' => $item['variant']?->id,
                         'title' => $product->title,
+                        'variant_name' => $item['variant']?->name,
                         'unit' => $product->unit,
                         'unit_price' => $item['unit_price'],
                         'quantity' => $item['quantity'],
@@ -345,8 +378,8 @@ class CheckoutService
                         'thumb_path' => $product->cover?->thumb_path,
                     ]);
 
-                    // Reserve the stock now (the row is locked, so this cannot go below zero).
-                    $product->decrement('stock', $item['quantity']);
+                    // Reserve the stock now (the rows are locked, so this cannot go below zero).
+                    $this->stock->reserve([['product_id' => $product->id, 'variant_id' => $item['variant']?->id, 'quantity' => $item['quantity']]]);
                 }
 
                 if ($milestones) {
@@ -457,21 +490,15 @@ class CheckoutService
     private function revive(Checkout $checkout): bool
     {
         $orders = Order::where('checkout_id', $checkout->id)->with('items')->get();
-        $needed = $orders->flatMap->items->groupBy('product_id')->map(fn ($items) => (int) $items->sum('quantity'));
+        $needed = $this->stock->linesOf($orders->flatMap->items);
 
-        $products = Product::whereIn('id', $needed->keys())->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+        $listed = Product::whereIn('id', $needed->pluck('product_id'))->with('seller')->get()->every(fn (Product $product) => $product->isListed());
 
-        foreach ($needed as $productId => $quantity) {
-            $product = $products->get($productId);
-
-            if (! $product || ! $product->isListed() || $product->stock < $quantity) {
-                return false;
-            }
+        if (! $listed || ! $this->stock->available($needed)) {
+            return false;
         }
 
-        foreach ($needed as $productId => $quantity) {
-            $products[$productId]->decrement('stock', $quantity);
-        }
+        $this->stock->reserve($needed);
 
         $orders->each(fn (Order $order) => $order->forceFill(['status' => OrderStatus::PendingPayment, 'cancelled_at' => null, 'stock_reserved' => true])->save());
 
@@ -498,12 +525,7 @@ class CheckoutService
             GroupBuyParticipant::where('checkout_id', $locked->id)->where('status', 'pending')->update(['status' => 'cancelled']);
 
             $orders = Order::where('checkout_id', $locked->id)->with('items')->get();
-            $quantities = $orders->where('stock_reserved', true)->flatMap->items
-                ->groupBy('product_id')->map(fn ($items) => (int) $items->sum('quantity'));
-
-            // Lock in id order, like checkout does.
-            Product::whereIn('id', $quantities->keys())->orderBy('id')->lockForUpdate()->get()
-                ->each(fn (Product $product) => $product->increment('stock', $quantities[$product->id]));
+            $this->stock->release($this->stock->linesOf($orders->where('stock_reserved', true)->flatMap->items));
 
             $orders->each(fn (Order $order) => $order->forceFill([
                 'status' => OrderStatus::Cancelled,
