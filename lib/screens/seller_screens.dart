@@ -355,6 +355,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
           },
           icon: const Icon(Icons.upload_file),
           label: const Text('Bulk upload'),
+          style: TextButton.styleFrom(foregroundColor: Colors.white),
         ),
       ]),
       floatingActionButton: FloatingActionButton.extended(onPressed: () => _edit(), icon: const Icon(Icons.add), label: const Text('Add product')),

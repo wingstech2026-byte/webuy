@@ -43,6 +43,7 @@ class _RiderJobsScreenState extends State<RiderJobsScreen> {
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RiderEarningsScreen())),
             icon: const Icon(Icons.account_balance_wallet_outlined),
             label: const Text('Earnings'),
+            style: TextButton.styleFrom(foregroundColor: Colors.white),
           ),
         ]),
         body: Loader<Map<String, dynamic>>(
