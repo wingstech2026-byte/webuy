@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../api/api_client.dart';
 import '../api/business_models.dart';
 import '../api/models.dart';
 import '../session.dart';
@@ -346,7 +347,16 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     final api = SessionScope.read(context).api;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('My products')),
+      appBar: AppBar(title: const Text('My products'), actions: [
+        TextButton.icon(
+          onPressed: () async {
+            final added = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (_) => const ProductImportScreen()));
+            if (added == true) setState(() => _reload++);
+          },
+          icon: const Icon(Icons.upload_file),
+          label: const Text('Bulk upload'),
+        ),
+      ]),
       floatingActionButton: FloatingActionButton.extended(onPressed: () => _edit(), icon: const Icon(Icons.add), label: const Text('Add product')),
       body: Loader<List<Map<String, dynamic>>>(
         key: ValueKey(_reload),
@@ -393,6 +403,21 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   final List<int> _remove = [];
   List<PickedPhoto> _newPhotos = [];
   bool _busy = false;
+  late final List<_OptionRow> _options = [
+    for (final v in ((p?['variants'] as List?) ?? []).whereType<Map<String, dynamic>>())
+      _OptionRow(id: v['id'] as int?, name: v['name'] as String? ?? '', price: v['price'] as String? ?? '', stock: '${v['stock'] ?? 0}'),
+  ];
+
+  @override
+  void dispose() {
+    for (final c in [_title, _description, _price, _stock, _unit, _moq]) {
+      c.dispose();
+    }
+    for (final o in _options) {
+      o.dispose();
+    }
+    super.dispose();
+  }
 
   Future<void> _save() async {
     setState(() => _busy = true);
@@ -407,6 +432,14 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       'condition': _condition,
       'status': _live ? 'active' : 'draft',
       for (var i = 0; i < _remove.length; i++) 'remove_images[$i]': '${_remove[i]}',
+      // Options (size, colour): an empty list switches them off.
+      'variants_sent': '1',
+      for (final (i, o) in _options.where((o) => o.name.text.trim().isNotEmpty).indexed) ...{
+        if (o.id != null) 'variants[$i][id]': '${o.id}',
+        'variants[$i][name]': o.name.text.trim(),
+        'variants[$i][price]': o.price.text.trim(),
+        'variants[$i][stock]': o.stock.text.trim().isEmpty ? '0' : o.stock.text.trim(),
+      },
       // Keep the existing wholesale tiers (edit them on the website).
       for (final (i, t) in ((p?['all_tiers'] as List?) ?? []).whereType<Map<String, dynamic>>().indexed) ...{
         'tiers[$i][min_quantity]': '${t['min_quantity']}',
@@ -461,7 +494,14 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           ]),
           const SizedBox(height: 10),
           Row(children: [
-            Expanded(child: TextField(controller: _stock, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'In stock'))),
+            Expanded(
+              child: TextField(
+                controller: _stock,
+                enabled: _options.isEmpty,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(labelText: 'In stock', helperText: _options.isEmpty ? null : 'Total of the options'),
+              ),
+            ),
             const SizedBox(width: 10),
             Expanded(child: TextField(controller: _moq, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Minimum order'))),
           ]),
@@ -471,13 +511,133 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
             selected: {_condition},
             onSelectionChanged: (s) => setState(() => _condition = s.first),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 14),
+          const Text('Options (size, colour…)', style: TextStyle(fontWeight: FontWeight.w700)),
+          const Text('Leave empty when there is only one kind. Price empty = the main price.', style: TextStyle(color: WiBuyColors.muted, fontSize: 12)),
+          for (final o in _options)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(children: [
+                Expanded(flex: 3, child: TextField(controller: o.name, decoration: const InputDecoration(labelText: 'Option', hintText: 'Large / Red'))),
+                const SizedBox(width: 6),
+                Expanded(flex: 2, child: TextField(controller: o.price, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Price'))),
+                const SizedBox(width: 6),
+                Expanded(flex: 2, child: TextField(controller: o.stock, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Stock'))),
+                IconButton(
+                  tooltip: 'Remove option',
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: () => setState(() {
+                    _options.remove(o);
+                    o.dispose();
+                  }),
+                ),
+              ]),
+            ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(onPressed: _options.length >= 30 ? null : () => setState(() => _options.add(_OptionRow())), icon: const Icon(Icons.add), label: const Text('Add option')),
+          ),
+          const SizedBox(height: 4),
           TextField(controller: _description, maxLines: 4, decoration: const InputDecoration(labelText: 'Description')),
           SwitchListTile(contentPadding: EdgeInsets.zero, value: _live, onChanged: (v) => setState(() => _live = v), title: const Text('Show to buyers now')),
           const Text('Wholesale prices, member prices and samples: edit on the website.', style: TextStyle(color: WiBuyColors.muted, fontSize: 12)),
           const SizedBox(height: 14),
           FilledButton(onPressed: _busy ? null : _save, child: Text(_busy ? 'Saving…' : 'Save product')),
         ]),
+      );
+}
+
+/// One option row in the product form.
+class _OptionRow {
+  _OptionRow({this.id, String name = '', String price = '', String stock = ''})
+      : name = TextEditingController(text: name),
+        price = TextEditingController(text: price),
+        stock = TextEditingController(text: stock);
+
+  final int? id;
+  final TextEditingController name;
+  final TextEditingController price;
+  final TextEditingController stock;
+
+  void dispose() {
+    name.dispose();
+    price.dispose();
+    stock.dispose();
+  }
+}
+
+/// Bulk upload: paste rows copied from a spreadsheet (or CSV text). Every row is checked first;
+/// products are added as drafts so the seller can add photos before showing them.
+class ProductImportScreen extends StatefulWidget {
+  const ProductImportScreen({super.key});
+
+  @override
+  State<ProductImportScreen> createState() => _ProductImportScreenState();
+}
+
+class _ProductImportScreenState extends State<ProductImportScreen> {
+  final _rows = TextEditingController();
+  List<String> _errors = [];
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _rows.dispose();
+    super.dispose();
+  }
+
+  Future<void> _upload() async {
+    setState(() {
+      _busy = true;
+      _errors = [];
+    });
+    try {
+      final json = await SessionScope.read(context).api.post('/seller/products/import', {'csv': _rows.text}) as Map<String, dynamic>;
+      if (!mounted) return;
+      showMessage(context, json['message'] as String);
+      Navigator.pop(context, true);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      final rows = e.errors['rows'];
+      rows == null || rows.isEmpty ? showMessage(context, e) : setState(() => _errors = rows);
+    } on Object catch (e) {
+      if (mounted) showMessage(context, e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Bulk upload')),
+        body: Loader<Map<String, dynamic>>(
+          load: () async => await SessionScope.read(context).api.get('/seller/products/import') as Map<String, dynamic>,
+          builder: (context, json, reload) => ListView(padding: const EdgeInsets.all(16), children: [
+            const Text('Add many products at once', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            Text(
+              'In your spreadsheet, select the rows (with the heading row first), copy, and paste them below. '
+              'Up to ${json['max_rows']} products. They are added as drafts: add photos, then set each one live.',
+            ),
+            const SizedBox(height: 8),
+            Text('Columns: ${(json['columns'] as List).join(', ')}. Only title, price and stock are needed.', style: const TextStyle(color: WiBuyColors.muted, fontSize: 12)),
+            TextButton(onPressed: () => setState(() => _rows.text = json['example'] as String), child: const Text('Fill in an example')),
+            TextField(
+              controller: _rows,
+              minLines: 6,
+              maxLines: 14,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+              decoration: const InputDecoration(labelText: 'Rows', hintText: 'title,price,stock\nOil 5L,95,10', alignLabelWithHint: true),
+            ),
+            if (_errors.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              const Text('Nothing was added. Fix these rows:', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.red)),
+              for (final e in _errors) Text('• $e', style: const TextStyle(color: Colors.red)),
+            ],
+            const SizedBox(height: 12),
+            FilledButton(onPressed: _busy ? null : _upload, child: Text(_busy ? 'Checking…' : 'Add products')),
+          ]),
+        ),
       );
 }
 

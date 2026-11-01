@@ -3,20 +3,22 @@ import 'package:flutter/material.dart';
 import '../api/models.dart';
 import '../session.dart';
 import '../widgets/common.dart';
+import 'photo_search_screen.dart';
 
 /// Search and category pages, with the website's sort options and paging.
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key, this.category, this.title});
+  const SearchScreen({super.key, this.category, this.title, this.initialQuery});
 
   final String? category;
   final String? title;
+  final String? initialQuery;
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
 class _SearchScreenState extends State<SearchScreen> {
-  final _query = TextEditingController();
+  late final _query = TextEditingController(text: widget.initialQuery ?? '');
   final _products = <Product>[];
   String _sort = '';
   int _page = 0;
@@ -92,7 +94,10 @@ class _SearchScreenState extends State<SearchScreen> {
                 hintText: 'What are you looking for?',
                 prefixIcon: const Icon(Icons.search),
                 contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                suffixIcon: IconButton(icon: const Icon(Icons.arrow_forward), onPressed: _search),
+                suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
+                  IconButton(tooltip: 'Search with a photo', icon: const Icon(Icons.photo_camera_outlined), onPressed: () => startPhotoSearch(context)),
+                  IconButton(icon: const Icon(Icons.arrow_forward), onPressed: _search),
+                ]),
               ),
             ),
           ),

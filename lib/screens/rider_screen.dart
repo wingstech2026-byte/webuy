@@ -38,7 +38,13 @@ class _RiderJobsScreenState extends State<RiderJobsScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Rider jobs')),
+        appBar: AppBar(title: const Text('Rider jobs'), actions: [
+          TextButton.icon(
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RiderEarningsScreen())),
+            icon: const Icon(Icons.account_balance_wallet_outlined),
+            label: const Text('Earnings'),
+          ),
+        ]),
         body: Loader<Map<String, dynamic>>(
           key: ValueKey(_version),
           load: () async => await SessionScope.read(context).api.get('/rider/jobs') as Map<String, dynamic>,
@@ -170,4 +176,119 @@ class _RiderJobScreenState extends State<RiderJobScreen> {
       ]),
     );
   }
+}
+
+/// "My earnings": delivery fees (pending until the buyer confirms), payouts, and withdrawing to mobile money.
+class RiderEarningsScreen extends StatefulWidget {
+  const RiderEarningsScreen({super.key});
+
+  @override
+  State<RiderEarningsScreen> createState() => _RiderEarningsScreenState();
+}
+
+class _RiderEarningsScreenState extends State<RiderEarningsScreen> {
+  int _version = 0;
+  final _amount = TextEditingController();
+  final _phone = TextEditingController();
+  String? _operator;
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    _phone.dispose();
+    super.dispose();
+  }
+
+  Future<void> _withdraw() async {
+    setState(() => _busy = true);
+    try {
+      await SessionScope.read(context).api.post('/rider/payouts', {'amount': _amount.text.trim(), 'operator': _operator, 'phone': _phone.text.trim()});
+      if (!mounted) return;
+      showMessage(context, 'Payout requested. We will check it and send it to your mobile money.');
+      setState(() {
+        _amount.clear();
+        _version++;
+      });
+    } on Object catch (e) {
+      if (mounted) showMessage(context, e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Widget _tile(String label, String? amount, {bool strong = false}) => Expanded(
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label, style: const TextStyle(color: WiBuyColors.muted, fontSize: 12)),
+              Text(formatLe(amount), style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: strong ? WiBuyColors.green : null)),
+            ]),
+          ),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('My earnings')),
+        body: Loader<Map<String, dynamic>>(
+          key: ValueKey(_version),
+          load: () async => await SessionScope.read(context).api.get('/rider/earnings') as Map<String, dynamic>,
+          builder: (context, json, reload) {
+            final money = json['money'] as Map<String, dynamic>;
+            final payTo = json['pay_to'] as Map<String, dynamic>;
+            _operator ??= payTo['operator'] as String? ?? 'ORANGE';
+            if (_phone.text.isEmpty) _phone.text = displayPhone(payTo['phone'] as String?);
+            final payouts = (json['payouts'] as List).whereType<Map<String, dynamic>>();
+            final entries = (json['entries'] as List).whereType<Map<String, dynamic>>();
+
+            return RefreshIndicator(
+              onRefresh: reload,
+              child: ListView(padding: const EdgeInsets.all(12), children: [
+                const Text('You earn the delivery fee once the buyer confirms the order.', style: TextStyle(color: WiBuyColors.muted)),
+                const SizedBox(height: 8),
+                Row(children: [_tile('Available', money['available'] as String?, strong: true), _tile('Pending', money['pending'] as String?)]),
+                Row(children: [_tile('On the way', money['in_transit'] as String?), _tile('Paid out', money['paid_out'] as String?)]),
+                const Padding(padding: EdgeInsets.fromLTRB(2, 14, 2, 6), child: Text('Withdraw to mobile money', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
+                SegmentedButton<String>(
+                  segments: const [ButtonSegment(value: 'ORANGE', label: Text('Orange Money')), ButtonSegment(value: 'AFRIMONEY', label: Text('Afrimoney'))],
+                  selected: {_operator!},
+                  onSelectionChanged: (s) => setState(() => _operator = s.first),
+                ),
+                const SizedBox(height: 8),
+                TextField(controller: _phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Mobile money number')),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _amount,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(labelText: 'Amount', helperText: 'Minimum ${formatLe(json['min_payout'] as String?)}'),
+                ),
+                const SizedBox(height: 8),
+                FilledButton(onPressed: _busy ? null : _withdraw, child: const Text('Withdraw')),
+                if (payouts.isNotEmpty) ...[
+                  const Padding(padding: EdgeInsets.fromLTRB(2, 18, 2, 6), child: Text('Payouts', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
+                  for (final p in payouts)
+                    Card(
+                      child: ListTile(
+                        title: Text(formatLe(p['amount'] as String?), style: const TextStyle(fontWeight: FontWeight.w700)),
+                        subtitle: Text('${p['operator']} ${displayPhone(p['phone'] as String?)}${p['rejection_reason'] != null ? '\n${p['rejection_reason']}' : ''}'),
+                        trailing: Text(p['status_label'] as String),
+                      ),
+                    ),
+                ],
+                const Padding(padding: EdgeInsets.fromLTRB(2, 18, 2, 6), child: Text('Credits and debits', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
+                if (entries.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(14), child: Text('Nothing yet. Delivery fees are added here when an order completes.'))),
+                for (final e in entries)
+                  ListTile(
+                    dense: true,
+                    title: Text(e['type'] as String),
+                    subtitle: Text(e['description'] as String),
+                    trailing: Text(formatLe(e['amount'] as String?), style: const TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+              ]),
+            );
+          },
+        ),
+      );
 }

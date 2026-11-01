@@ -40,4 +40,39 @@ void main() {
     expect(requests.single, contains('4821'));
     expect(find.text('Delivered ✓ Thank you.'), findsOneWidget);
   });
+
+  testWidgets('the rider sees earnings and withdraws to mobile money', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final requests = <String>[];
+    final client = MockClient((request) async {
+      requests.add('${request.method} ${request.url.path} ${request.body}');
+      final body = request.method == 'POST'
+          ? {'data': {'id': 1, 'amount': '20.00', 'status': 'requested'}}
+          : {
+              'money': {'pending': '15.00', 'available': '20.00', 'paid_out': '0.00', 'in_transit': '0.00'},
+              'min_payout': '10.00',
+              'pay_to': {'operator': null, 'phone': '23276111222'},
+              'payouts': [],
+              'entries': [{'type': 'Delivery fee', 'description': 'Delivery of order WB-1001', 'amount': '20.00', 'created_at': null}],
+            };
+      return http.Response(jsonEncode(body), 200, headers: {'content-type': 'application/json; charset=utf-8'});
+    });
+    final session = Session(ApiClient(httpClient: client, baseUrl: 'http://test/api/v1'), await SharedPreferences.getInstance());
+
+    await tester.pumpWidget(SessionScope(session: session, child: const MaterialApp(home: RiderEarningsScreen())));
+    await tester.pumpAndSettle();
+    expect(find.text('Delivery of order WB-1001'), findsOneWidget);
+
+    await tester.tap(find.text('Afrimoney'));
+    await tester.enterText(find.widgetWithText(TextField, 'Amount'), '20');
+    await tester.ensureVisible(find.text('Withdraw'));
+    await tester.tap(find.text('Withdraw'));
+    await tester.pumpAndSettle();
+
+    final post = requests.firstWhere((r) => r.startsWith('POST'));
+    expect(post, contains('/rider/payouts'));
+    expect(post, contains('"operator":"AFRIMONEY"'));
+    expect(post, contains('"amount":"20"'));
+    expect(requests.where((r) => r.startsWith('GET')).length, 2); // reloaded after the request
+  });
 }

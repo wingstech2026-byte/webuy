@@ -11,6 +11,7 @@ import 'group_buy_screen.dart';
 import 'login_screen.dart';
 import 'nearby_screen.dart';
 import 'notifications_screen.dart';
+import 'photo_search_screen.dart';
 import 'search_screen.dart';
 import 'shop_screen.dart';
 
@@ -85,10 +86,15 @@ class HomeScreen extends StatelessWidget {
                 height: 48,
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-                child: const Row(children: [
-                  Icon(Icons.search, color: WiBuyColors.muted),
-                  SizedBox(width: 8),
-                  Text('Search rice, phones, cloth…', style: TextStyle(color: WiBuyColors.muted, fontSize: 16)),
+                child: Row(children: [
+                  const Icon(Icons.search, color: WiBuyColors.muted),
+                  const SizedBox(width: 8),
+                  const Expanded(child: Text('Search rice, phones, cloth…', style: TextStyle(color: WiBuyColors.muted, fontSize: 16))),
+                  IconButton(
+                    tooltip: 'Search with a photo',
+                    icon: const Icon(Icons.photo_camera_outlined, color: WiBuyColors.green),
+                    onPressed: () => startPhotoSearch(context),
+                  ),
                 ]),
               ),
             ),
