@@ -1,0 +1,379 @@
+import 'package:flutter/material.dart';
+
+import '../api/geo_models.dart';
+import '../api/models.dart';
+import '../api/rewards_models.dart';
+import '../session.dart';
+import '../theme.dart';
+import '../util/money.dart';
+import '../widgets/common.dart';
+import 'addresses_screen.dart';
+import 'payment_screen.dart';
+import 'rewards_screen.dart';
+
+/// Checkout for the whole cart, or "Buy now" for one product. One order is made per seller;
+/// the backend computes every fee and total (shown from /checkout/quote).
+class CheckoutScreen extends StatefulWidget {
+  const CheckoutScreen({super.key, this.productSlug, this.quantity, this.couponId, this.sample = false, this.variantId});
+
+  /// The option chosen on the product page (size, colour...).
+  final int? variantId;
+
+  /// One unit at the sample price.
+  final bool sample;
+
+  final String? productSlug;
+  final int? quantity;
+
+  /// A coupon to start with (e.g. from a finished price cut).
+  final int? couponId;
+
+  @override
+  State<CheckoutScreen> createState() => _CheckoutScreenState();
+}
+
+class _CheckoutScreenState extends State<CheckoutScreen> {
+  final _name = TextEditingController();
+  final _phone = TextEditingController();
+  final _addressText = TextEditingController();
+  final _note = TextEditingController();
+  final _payerPhone = TextEditingController();
+
+  String _district = 'Western Area Urban';
+
+  /// Saved addresses; when one is chosen its details (and map point) are used on the server.
+  List<SavedAddress> _addresses = const [];
+  int? _addressId;
+
+  SavedAddress? get _address => _addresses.where((a) => a.id == _addressId).firstOrNull;
+  String _operator = 'ORANGE';
+
+  /// seller id => 'delivery' | 'pickup'
+  final Map<int, String> _methods = {};
+
+  Quote? _quote;
+  Object? _error;
+  late int? _couponId = widget.couponId;
+  bool _couponTouched = false;
+  List<Coupon> _coupons = [];
+  bool _inParts = false;
+  bool _quoting = false;
+  bool _paying = false;
+
+  bool get _isBuyNow => widget.productSlug != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final user = SessionScope.read(context).user;
+    _name.text = user?.name ?? '';
+    _phone.text = displayPhone(user?.phone);
+    _payerPhone.text = displayPhone(user?.phone);
+    _loadAddresses();
+  }
+
+  Future<void> _loadAddresses() async {
+    try {
+      final list = await loadAddresses(context);
+      if (!mounted) return;
+      setState(() {
+        _addresses = list;
+        if (list.isNotEmpty) {
+          _addressId = list.first.id;
+          _district = list.first.district;
+        }
+      });
+    } on Object {
+      // No saved addresses (or offline): type one below as before.
+    }
+    if (mounted) _requote();
+  }
+
+  @override
+  void dispose() {
+    for (final c in [_name, _phone, _addressText, _note, _payerPhone]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Map<String, dynamic> get _lineParams => {
+        if (_isBuyNow) 'product': widget.productSlug,
+        if (_isBuyNow) 'qty': widget.quantity,
+        if (_isBuyNow && widget.variantId != null) 'variant': widget.variantId,
+        if (widget.sample) 'sample': true,
+      };
+
+  Future<void> _requote() async {
+    setState(() {
+      _quoting = true;
+      _error = null;
+    });
+    try {
+      final json = await SessionScope.read(context).api.post('/checkout/quote', {
+        ..._lineParams,
+        if (_addressId != null) 'address_id': _addressId else 'district': _district,
+        'methods': _methods.map((k, v) => MapEntry('$k', v)),
+        if (_couponId != null) 'coupon_id': _couponId,
+      }) as Map<String, dynamic>;
+      final quote = Quote.fromJson(json);
+      setState(() {
+        _quote = quote;
+        _coupons = quote.couponJson.map(Coupon.fromJson).toList();
+        // Start with the best usable coupon, until the person chooses themselves.
+        if (!_couponTouched && _couponId == null && _coupons.isNotEmpty) {
+          _couponId = _coupons.first.id;
+          _couponTouched = true;
+          _requote();
+        }
+        for (final group in quote.groups) {
+          if (group.method != null) _methods[group.sellerId] = group.method!;
+        }
+      });
+    } on Object catch (e) {
+      setState(() => _error = e);
+    } finally {
+      if (mounted) setState(() => _quoting = false);
+    }
+  }
+
+  bool get _needsAddress => _methods.values.contains('delivery');
+
+  Future<void> _pay() async {
+    final quote = _quote;
+    if (quote == null) return;
+    if (quote.groups.any((g) => !_methods.containsKey(g.sellerId))) {
+      showMessage(context, 'Choose delivery or pickup for every shop.');
+      return;
+    }
+
+    setState(() => _paying = true);
+    try {
+      final json = await SessionScope.read(context).api.post('/checkout', {
+        'source': _isBuyNow ? 'buy' : 'cart',
+        ..._lineParams,
+        if (_addressId != null) 'address_id': _addressId,
+        if (_addressId == null) ...{
+          'recipient_name': _name.text.trim(),
+          'recipient_phone': _phone.text.trim(),
+          'district': _district,
+          'address': _addressText.text.trim(),
+        },
+        'note': _note.text.trim(),
+        'methods': _methods.map((k, v) => MapEntry('$k', v)),
+        'operator': _operator,
+        'payer_phone': _payerPhone.text.trim(),
+        if (_couponId != null && quote.couponError == null) 'coupon_id': _couponId,
+        'payment_plan': _inParts && quote.canPayInParts ? 'milestones' : 'full',
+      }) as Map<String, dynamic>;
+      final checkout = CheckoutInfo.fromJson(json['data'] as Map<String, dynamic>);
+      if (!mounted) return;
+      SessionScope.read(context).refreshCartCount();
+      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => PaymentScreen(initial: checkout)));
+    } on Object catch (e) {
+      if (mounted) showMessage(context, e);
+    } finally {
+      if (mounted) setState(() => _paying = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final meta = SessionScope.of(context).meta;
+    final districts = meta?.districts ?? [_district];
+    final operators = meta?.operators ?? const [MapEntry('ORANGE', 'Orange Money'), MapEntry('AFRIMONEY', 'Afrimoney')];
+    final quote = _quote;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Checkout')),
+      body: quote == null
+          ? (_error != null ? ErrorRetry(message: _error.toString(), onRetry: _requote) : const Center(child: CircularProgressIndicator()))
+          : ListView(padding: const EdgeInsets.all(14), children: [
+              _section('1. Where are you?'),
+              if (_addresses.isNotEmpty)
+                Wrap(spacing: 8, runSpacing: 4, children: [
+                  for (final a in _addresses)
+                    ChoiceChip(
+                      avatar: Icon(a.hasPin ? Icons.location_on : Icons.location_on_outlined, size: 18),
+                      label: Text(a.label),
+                      selected: _addressId == a.id,
+                      onSelected: (_) {
+                        setState(() {
+                          _addressId = a.id;
+                          _district = a.district;
+                        });
+                        _requote();
+                      },
+                    ),
+                  ChoiceChip(
+                    label: const Text('Somewhere else'),
+                    selected: _addressId == null,
+                    onSelected: (_) {
+                      setState(() => _addressId = null);
+                      _requote();
+                    },
+                  ),
+                ]),
+              if (_address != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text('${_address!.recipientName} · ${_address!.oneLine}', style: const TextStyle(color: WiBuyColors.muted)),
+                )
+              else ...[
+              DropdownButtonFormField<String>(
+                initialValue: districts.contains(_district) ? _district : null,
+                decoration: const InputDecoration(labelText: 'District'),
+                items: [for (final d in districts) DropdownMenuItem(value: d, child: Text(d))],
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() => _district = value);
+                  _requote();
+                },
+              ),
+              TextButton.icon(
+                icon: const Icon(Icons.add_location_alt_outlined),
+                label: const Text('Save an address for next time'),
+                onPressed: () async {
+                  final added = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (_) => const AddressFormScreen()));
+                  if (added == true) _loadAddresses();
+                },
+              ),
+              ],
+              _section('2. Delivery or pickup'),
+              for (final group in quote.groups) _groupCard(group),
+              if (_addressId == null) ...[
+              _section('3. Who receives it?'),
+              TextField(controller: _name, decoration: const InputDecoration(labelText: 'Name')),
+              const SizedBox(height: 10),
+              TextField(controller: _phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Phone')),
+              ],
+              if (_needsAddress && _addressId == null) ...[
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _addressText,
+                  decoration: const InputDecoration(labelText: 'Address or landmark', hintText: 'Near the mosque, Wilkinson Road'),
+                ),
+              ],
+              const SizedBox(height: 10),
+              TextField(controller: _note, decoration: const InputDecoration(labelText: 'Note for the seller (optional)')),
+              _section('4. Pay with mobile money'),
+              SegmentedButton<String>(
+                segments: [for (final o in operators) ButtonSegment(value: o.key, label: Text(o.value))],
+                selected: {_operator},
+                onSelectionChanged: (s) => setState(() => _operator = s.first),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _payerPhone,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'Mobile money number'),
+              ),
+              if (_coupons.isNotEmpty) ...[
+                _section('5. Coupon'),
+                for (final coupon in _coupons)
+                  CouponTile(
+                    coupon,
+                    selected: _couponId == coupon.id,
+                    onTap: () {
+                      setState(() {
+                        _couponTouched = true;
+                        _couponId = _couponId == coupon.id ? null : coupon.id;
+                      });
+                      _requote();
+                    },
+                  ),
+                if (quote.couponError != null) Text(quote.couponError!, style: const TextStyle(color: Colors.red)),
+              ],
+              if (quote.canPayInParts)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _inParts,
+                  onChanged: (v) => setState(() => _inParts = v),
+                  title: Text('Pay in parts: ${quote.depositPercent}% now (${formatLe(quote.depositAmount)})'),
+                  subtitle: const Text('The balance before delivery. You can book a WiBuy inspection first.'),
+                ),
+              const SizedBox(height: 18),
+              _row('Items', quote.itemsTotal),
+              _row('Delivery', quote.deliveryTotal),
+              if (quote.passSavings != '0.00') _row('WiBuy Pass free delivery', '-${quote.passSavings}'),
+              if (quote.couponDiscount != '0.00') _row('Coupon', '-${quote.couponDiscount}'),
+              const Divider(),
+              _row('Total to pay', quote.amountDue, bold: true),
+              const SizedBox(height: 14),
+              FilledButton(
+                onPressed: _paying || _quoting ? null : _pay,
+                child: Text(_paying
+                    ? 'Sending payment request…'
+                    : (quote.amountDue == '0.00' ? 'Place free order' : 'Pay ${formatLe(_inParts && quote.canPayInParts ? quote.depositAmount : quote.amountDue)}')),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Your phone will ask you to approve the payment with your PIN. WiBuy keeps the money safe until you get your order.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: WiBuyColors.muted),
+              ),
+              const SizedBox(height: 24),
+            ]),
+    );
+  }
+
+  Widget _groupCard(QuoteGroup group) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(group.seller.shopName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+              for (final item in group.items)
+                Text('${item.quantity} × ${item.title}', maxLines: 1, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 8),
+              Wrap(spacing: 8, children: [
+                if (group.canDeliver)
+                  ChoiceChip(
+                    label: Text('Delivery${group.districtFee != null ? ' (${formatLe(group.districtFee)})' : ''}'),
+                    selected: _methods[group.sellerId] == 'delivery',
+                    onSelected: (_) => _choose(group, 'delivery'),
+                  ),
+                if (group.canPickup)
+                  ChoiceChip(
+                    label: const Text('Pickup (free)'),
+                    selected: _methods[group.sellerId] == 'pickup',
+                    onSelected: (_) => _choose(group, 'pickup'),
+                  ),
+              ]),
+              if (!group.canDeliver && group.deliveryReason != null)
+                Text(group.deliveryReason!, style: const TextStyle(color: Colors.red))
+              else if (!group.canDeliver && !group.canPickup)
+                const Text('This shop cannot deliver to your district.', style: TextStyle(color: Colors.red)),
+              if (_methods[group.sellerId] == 'delivery' && group.distanceKm != null)
+                Text('About ${group.distanceKm} km from the shop${group.deliveryWindow != null ? ' · usually ${group.deliveryWindow}' : ''} (estimate)',
+                    style: const TextStyle(color: WiBuyColors.muted)),
+              if (_methods[group.sellerId] == 'pickup' && group.seller.pickupAddress != null)
+                Text('Pick up at: ${group.seller.pickupAddress}', style: const TextStyle(color: WiBuyColors.muted)),
+              if (group.freeDelivery) const Text('Free delivery with WiBuy Pass ⭐', style: TextStyle(color: WiBuyColors.green, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              Text('Shop total: ${formatLe(group.total)}', style: const TextStyle(fontWeight: FontWeight.w700)),
+            ]),
+          ),
+        ),
+      );
+
+  void _choose(QuoteGroup group, String method) {
+    setState(() => _methods[group.sellerId] = method);
+    _requote();
+  }
+
+  Widget _section(String text) => Padding(
+        padding: const EdgeInsets.fromLTRB(2, 18, 2, 8),
+        child: Text(text, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+      );
+
+  Widget _row(String label, String amount, {bool bold = false}) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(children: [
+          Text(label, style: TextStyle(fontSize: bold ? 18 : 15, fontWeight: bold ? FontWeight.w800 : FontWeight.w400)),
+          const Spacer(),
+          Text(formatLe(amount), style: TextStyle(fontSize: bold ? 20 : 15, fontWeight: bold ? FontWeight.w900 : FontWeight.w600)),
+        ]),
+      );
+}

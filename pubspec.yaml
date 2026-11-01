@@ -1,0 +1,29 @@
+name: wibuy_mobile
+description: "WiBuy mobile app (Android and iPhone). Buy and sell easy for Salone. Uses the WiBuy Laravel backend's REST API."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.5.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # REST calls to the Laravel backend
+  flutter_map: ^8.3.2
+  geolocator: ^14.1.2
+  http: ^1.2.2
+  # Keeps the login token between app starts
+  image_picker: ^1.2.4
+  latlong2: ^0.10.1
+  shared_preferences: ^2.3.2
+  # Opens WhatsApp share links and website pages (selling, problem reports)
+  url_launcher: ^6.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
