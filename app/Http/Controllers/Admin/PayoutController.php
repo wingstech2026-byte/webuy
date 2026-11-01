@@ -19,7 +19,7 @@ class PayoutController extends Controller
     {
         $status = PayoutStatus::tryFrom((string) $request->query('status', 'requested'));
 
-        $items = Payout::with('seller.user')
+        $items = Payout::with('seller.user', 'rider')
             ->when($status, fn ($q) => $q->where('status', $status))
             ->latest('id')->paginate(25)->withQueryString();
 
@@ -34,7 +34,7 @@ class PayoutController extends Controller
             return back()->withErrors(['general' => $e->getMessage()]);
         }
 
-        return back()->with('status', 'Payout approved. It is being sent to the seller.');
+        return back()->with('status', 'Payout approved. The money is being sent.');
     }
 
     public function reject(ReasonRequest $request, Payout $payout): RedirectResponse
@@ -45,6 +45,6 @@ class PayoutController extends Controller
             return back()->withErrors(['general' => $e->getMessage()]);
         }
 
-        return back()->with('status', 'Payout rejected. The money is back on the seller\'s balance.');
+        return back()->with('status', 'Payout rejected. The money is back on their balance.');
     }
 }

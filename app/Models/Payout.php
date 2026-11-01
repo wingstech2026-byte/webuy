@@ -28,6 +28,23 @@ class Payout extends Model
         return $this->belongsTo(Seller::class);
     }
 
+    /** Set instead of the seller when a WiBuy rider withdraws delivery fees. */
+    public function rider(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'rider_id');
+    }
+
+    /** Who gets the money: the shop owner or the rider. */
+    public function recipient(): User
+    {
+        return $this->rider ?? $this->seller->user;
+    }
+
+    public function recipientName(): string
+    {
+        return $this->rider ? "{$this->rider->name} (rider)" : $this->seller->shop_name;
+    }
+
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');

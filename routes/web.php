@@ -16,6 +16,7 @@ use App\Http\Controllers\GroupBuyPageController;
 use App\Http\Controllers\GroupPageController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\OrderController;
+use App\Http\Controllers\PhotoSearchController;
 use App\Http\Controllers\PriceCutPageController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ReturnController;
@@ -115,9 +116,13 @@ Route::middleware('auth')->group(function () {
     Route::post('/group-buys/{campaign}/start', [GroupBuyPageController::class, 'start'])->whereNumber('campaign')->middleware('throttle:checkout')->name('group-buys.start');
     Route::post('/g/{group:token}/join', [GroupBuyPageController::class, 'join'])->middleware('throttle:checkout')->name('groups.join');
     // WiBuy riders: open jobs, my deliveries, and each step
+    Route::get('/search/photo', [PhotoSearchController::class, 'create'])->name('search.photo');
+    Route::post('/search/photo', [PhotoSearchController::class, 'store'])->middleware('throttle:10,1')->name('search.photo.store');
     Route::get('/rider', [RiderController::class, 'index'])->name('rider.index');
     Route::get('/rider/jobs/{deliveryJob}', [RiderController::class, 'show'])->name('rider.jobs.show');
     Route::post('/rider/jobs/{deliveryJob}/{action}', [RiderController::class, 'act'])->whereIn('action', ['accept', 'release', 'picked-up', 'deliver'])->middleware('throttle:30,1')->name('rider.jobs.act');
+    Route::get('/rider/earnings', [RiderController::class, 'earnings'])->name('rider.earnings');
+    Route::post('/rider/payouts', [RiderController::class, 'requestPayout'])->middleware('throttle:10,1')->name('rider.payouts.store');
     Route::get('/orders/{order}/return', [ReturnController::class, 'create'])->name('returns.create');
     Route::post('/orders/{order}/return', [ReturnController::class, 'store'])->middleware('throttle:10,1')->name('returns.store');
     Route::get('/problems/{dispute}', [DisputeController::class, 'show'])->name('disputes.show');

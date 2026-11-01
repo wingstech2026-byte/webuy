@@ -2,15 +2,22 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\Operator;
 use App\Exceptions\MarketplaceException;
+use App\Http\Requests\RiderPayoutRequest;
 use App\Models\DeliveryJob;
+use App\Models\LedgerEntry;
+use App\Models\Payout;
 use App\Models\User;
 use App\Services\DeliveryService;
+use App\Services\LedgerService;
+use App\Services\PayoutService;
+use App\Services\SettingsService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
-/** The rider's pages: open jobs near them, their own deliveries, and each step of a delivery. */
+/** The rider's pages: open jobs near them, their own deliveries, each step of a delivery, and earnings. */
 class RiderController extends Controller
 {
     public function __construct(private DeliveryService $deliveries) {}
@@ -59,6 +66,40 @@ class RiderController extends Controller
             : redirect()->route('rider.jobs.show', $deliveryJob)->with('status', 'Done.');
     }
 
+    /** Delivery fees earned, payouts and every credit and debit. Former riders can still withdraw what they earned. */
+    public function earnings(Request $request, LedgerService $ledger): View
+    {
+        $rider = $this->earner($request);
+        $last = Payout::where('rider_id', $rider->id)->latest('id')->first();
+
+        return view('rider.earnings', [
+            'money' => $ledger->riderSummary($rider),
+            'entries' => LedgerEntry::where('rider_id', $rider->id)->with('order')->latest('id')->paginate(15, ['*'], 'ledger')->withQueryString(),
+            'payouts' => Payout::where('rider_id', $rider->id)->latest('id')->paginate(10, ['*'], 'payouts')->withQueryString(),
+            'minPayout' => SettingsService::minPayout(),
+            'payTo' => ['operator' => $last?->operator, 'phone' => $last->phone ?? $rider->phone],
+        ]);
+    }
+
+    public function requestPayout(RiderPayoutRequest $request, PayoutService $payouts): RedirectResponse
+    {
+        $rider = $this->earner($request);
+
+        try {
+            $payout = $payouts->requestForRider($rider, $request->validated('amount'), Operator::from($request->validated('operator')), $request->validated('phone'));
+        } catch (MarketplaceException $e) {
+            return back()->withInput()->withErrors(['general' => $e->getMessage()]);
+        }
+
+        return redirect()->route('rider.earnings')->with('status', 'Payout requested: '.money($payout->amount).'. We will check it and send it to your mobile money.');
+    }
+
+    /** Riders, and former riders who still have delivery fees on their balance. */
+    public static function canSeeEarnings(User $user): bool
+    {
+        return $user->is_rider || LedgerEntry::where('rider_id', $user->id)->exists();
+    }
+
     /**
      * What a rider may see. Before taking a job: areas and the fee only. After: the buyer's address and phone.
      *
@@ -90,6 +131,13 @@ class RiderController extends Controller
             'code_attempts_left' => max(0, DeliveryService::MAX_CODE_ATTEMPTS - $job->code_attempts),
             'created_at' => $job->created_at?->toIso8601String(),
         ];
+    }
+
+    private function earner(Request $request): User
+    {
+        abort_unless(self::canSeeEarnings($request->user()), 403, 'This page is for WiBuy riders.');
+
+        return $request->user();
     }
 
     private function rider(Request $request): User

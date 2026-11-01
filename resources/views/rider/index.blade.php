@@ -4,7 +4,8 @@
 
 @section('content')
     <h1 class="mb-1 text-2xl font-extrabold">🛵 Rider jobs</h1>
-    <p class="mb-4 text-stone-600">{{ (clone $done)->count() }} delivered &middot; {{ money((clone $done)->sum('fee') ?: 0) }} in delivery fees. Take a job, collect it at the shop, and hand it over with the buyer's 4-digit code.</p>
+    <p class="mb-2 text-stone-600">{{ (clone $done)->count() }} delivered &middot; {{ money((clone $done)->sum('fee') ?: 0) }} in delivery fees. Take a job, collect it at the shop, and hand it over with the buyer's 4-digit code.</p>
+    <a href="{{ route('rider.earnings') }}" class="btn btn-outline btn-sm mb-4">💰 My earnings and payouts</a>
 
     @if ($mine->isNotEmpty())
         <h2 class="mb-2 text-lg font-extrabold">My deliveries</h2>

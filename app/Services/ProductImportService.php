@@ -117,8 +117,10 @@ class ProductImportService
 
         $first = fgets($handle);
         rewind($handle);
-        // Spreadsheets saved in some countries use ";" between columns.
-        $delimiter = $first !== false && substr_count($first, ';') > substr_count($first, ',') ? ';' : ',';
+        // Spreadsheets saved in some countries use ";" between columns; cells copied from a spreadsheet use tabs.
+        $counts = $first === false ? [] : array_filter([',' => substr_count($first, ','), ';' => substr_count($first, ';'), "\t" => substr_count($first, "\t")]);
+        arsort($counts);
+        $delimiter = (string) (array_key_first($counts) ?? ',');
 
         $header = fgetcsv($handle, 0, $delimiter, '"', '');
         $header = array_map(fn ($h) => strtolower(trim(preg_replace('/^\xEF\xBB\xBF/', '', (string) $h))), $header ?: []);

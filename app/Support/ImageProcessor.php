@@ -27,6 +27,32 @@ class ImageProcessor
         int $quality = 72,
         int $thumbQuality = 68,
     ): array {
+        $source = $this->load($absolutePath);
+
+        $name = (string) Str::uuid();
+        $directory = trim($directory, '/').'/'.now()->format('Y/m');
+        $storage = Storage::disk($disk);
+
+        // No per-file visibility: the disk decides (Cloud buckets reject per-file ACLs).
+        $storage->put("{$directory}/{$name}.jpg", $this->jpeg($this->fit($source, $maxSide), $quality));
+        $storage->put("{$directory}/{$name}-thumb.jpg", $this->jpeg($this->fit($source, $thumbSide), $thumbQuality));
+
+        return ['path' => "{$directory}/{$name}.jpg", 'thumb' => "{$directory}/{$name}-thumb.jpg"];
+    }
+
+    /**
+     * A smaller, upright JPEG of an image, kept in memory only (nothing is stored).
+     *
+     * @throws RuntimeException when the file is not a usable image
+     */
+    public function shrink(string $absolutePath, int $maxSide, int $quality = 75): string
+    {
+        return $this->jpeg($this->fit($this->load($absolutePath), $maxSide), $quality);
+    }
+
+    /** @throws RuntimeException when the file is not a usable image */
+    private function load(string $absolutePath): \GdImage
+    {
         if (! function_exists('imagecreatefromstring')) {
             throw new RuntimeException('The PHP GD extension is required for images.');
         }
@@ -44,17 +70,7 @@ class ImageProcessor
             throw new RuntimeException('That image could not be read.');
         }
 
-        $source = $this->upright($source, $absolutePath, $info[2] ?? null);
-
-        $name = (string) Str::uuid();
-        $directory = trim($directory, '/').'/'.now()->format('Y/m');
-        $storage = Storage::disk($disk);
-
-        // No per-file visibility: the disk decides (Cloud buckets reject per-file ACLs).
-        $storage->put("{$directory}/{$name}.jpg", $this->jpeg($this->fit($source, $maxSide), $quality));
-        $storage->put("{$directory}/{$name}-thumb.jpg", $this->jpeg($this->fit($source, $thumbSide), $thumbQuality));
-
-        return ['path' => "{$directory}/{$name}.jpg", 'thumb' => "{$directory}/{$name}-thumb.jpg"];
+        return $this->upright($source, $absolutePath, $info[2] ?? null);
     }
 
     /** Scale down so the longest side is at most $max. Never scales up. */

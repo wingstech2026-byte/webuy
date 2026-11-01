@@ -2,14 +2,21 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\Operator;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\RiderController as WebRiderController;
+use App\Http\Requests\RiderPayoutRequest;
 use App\Models\DeliveryJob;
+use App\Models\LedgerEntry;
+use App\Models\Payout;
 use App\Services\DeliveryService;
+use App\Services\LedgerService;
+use App\Services\PayoutService;
+use App\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-/** Rider deliveries in the app: open jobs, my jobs, and each step (photo proof is a multipart upload). */
+/** Rider deliveries in the app: open jobs, my jobs, each step (photo proof is a multipart upload), and earnings. */
 class RiderController extends Controller
 {
     public function __construct(private DeliveryService $deliveries) {}
@@ -30,6 +37,46 @@ class RiderController extends Controller
             'delivered_count' => (clone $done)->count(),
             'delivered_fees' => (string) ((clone $done)->sum('fee') ?: '0.00'),
         ]);
+    }
+
+    /** Delivery fees, payouts and the latest credits and debits. Former riders can still withdraw what they earned. */
+    public function earnings(Request $request, LedgerService $ledger): JsonResponse
+    {
+        $rider = $request->user();
+        abort_unless(WebRiderController::canSeeEarnings($rider), 403, 'This is for WiBuy riders.');
+        $last = Payout::where('rider_id', $rider->id)->latest('id')->first();
+
+        return response()->json([
+            'money' => $ledger->riderSummary($rider),
+            'min_payout' => SettingsService::minPayout(),
+            'pay_to' => ['operator' => $last?->operator?->value, 'phone' => $last->phone ?? $rider->phone],
+            'payouts' => Payout::where('rider_id', $rider->id)->latest('id')->limit(20)->get()->map(fn (Payout $p) => [
+                'id' => $p->id,
+                'amount' => (string) $p->amount,
+                'status' => $p->status->value,
+                'status_label' => $p->status->label(),
+                'operator' => $p->operator->label(),
+                'phone' => $p->phone,
+                'rejection_reason' => $p->rejection_reason,
+                'created_at' => $p->created_at?->toIso8601String(),
+            ])->values(),
+            'entries' => LedgerEntry::where('rider_id', $rider->id)->latest('id')->limit(30)->get()->map(fn (LedgerEntry $e) => [
+                'type' => $e->type->label(),
+                'description' => $e->description,
+                'amount' => (string) $e->amount,
+                'created_at' => $e->created_at?->toIso8601String(),
+            ])->values(),
+        ]);
+    }
+
+    public function requestPayout(RiderPayoutRequest $request, PayoutService $payouts): JsonResponse
+    {
+        $rider = $request->user();
+        abort_unless(WebRiderController::canSeeEarnings($rider), 403, 'This is for WiBuy riders.');
+
+        $payout = $payouts->requestForRider($rider, $request->validated('amount'), Operator::from($request->validated('operator')), $request->validated('phone'));
+
+        return response()->json(['data' => ['id' => $payout->id, 'amount' => (string) $payout->amount, 'status' => $payout->status->value]], 201);
     }
 
     public function act(Request $request, DeliveryJob $deliveryJob, string $action): JsonResponse

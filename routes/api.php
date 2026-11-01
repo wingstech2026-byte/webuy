@@ -94,6 +94,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('/payments/{payment}/simulate', [V1\MilestoneController::class, 'simulate'])->name('payments.simulate');
         Route::get('/agent/inspections', [V1\AgentController::class, 'index'])->name('agent.inspections');
         Route::post('/agent/inspections/{inspection}/report', [V1\AgentController::class, 'report'])->middleware('throttle:20,1')->name('agent.report');
+        Route::post('/search/photo', V1\PhotoSearchController::class)->middleware('throttle:10,1')->name('search.photo');
         Route::post('/assistant', [V1\AssistantController::class, 'ask'])->middleware('throttle:10,1')->name('assistant.ask');
         Route::post('/assistant/rfq', [V1\AssistantController::class, 'createRfq'])->middleware('throttle:10,1')->name('assistant.rfq');
         Route::get('/global/products', [V1\ImportController::class, 'products'])->name('global.products');
@@ -106,6 +107,8 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('/orders/{order}/problem', [V1\DisputeController::class, 'store'])->middleware('throttle:10,1')->name('disputes.store');
         Route::get('/rider/jobs', [V1\RiderController::class, 'jobs'])->name('rider.jobs');
         Route::post('/rider/jobs/{deliveryJob}/{action}', [V1\RiderController::class, 'act'])->whereIn('action', ['accept', 'release', 'picked-up', 'deliver'])->middleware('throttle:30,1')->name('rider.jobs.act');
+        Route::get('/rider/earnings', [V1\RiderController::class, 'earnings'])->name('rider.earnings');
+        Route::post('/rider/payouts', [V1\RiderController::class, 'requestPayout'])->middleware('throttle:10,1')->name('rider.payouts.store');
         Route::get('/return-reasons', [V1\ReturnController::class, 'reasons'])->name('returns.reasons');
         Route::post('/orders/{order}/return', [V1\ReturnController::class, 'store'])->middleware('throttle:10,1')->name('returns.store');
         Route::post('/seller/returns/{returnRequest}/{action}', [V1\ReturnController::class, 'act'])
@@ -143,6 +146,8 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('/orders/{order}', [V1\SellerController::class, 'order'])->name('orders.show');
             Route::post('/orders/{order}/{action}', [V1\SellerController::class, 'act'])->whereIn('action', ['accept', 'reject', 'ship', 'deliver'])->name('orders.act');
             Route::get('/products', [V1\SellerController::class, 'products'])->name('products');
+            Route::get('/products/import', [V1\SellerController::class, 'importTemplate'])->name('products.import-template');
+            Route::post('/products/import', [V1\SellerController::class, 'import'])->middleware('throttle:10,1')->name('products.import');
             Route::post('/products', [V1\SellerController::class, 'saveProduct'])->middleware('throttle:30,1')->name('products.store');
             Route::post('/products/{product:slug}', [V1\SellerController::class, 'saveProduct'])->middleware('throttle:30,1')->name('products.update');
             Route::get('/earnings', [V1\SellerController::class, 'earnings'])->name('earnings');

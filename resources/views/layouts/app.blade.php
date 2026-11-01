@@ -78,6 +78,9 @@
             <label for="site-search" class="sr-only">Search products</label>
             <input id="site-search" type="search" name="q" value="{{ request()->routeIs('search', 'categories.show') ? request('q') : '' }}"
                    placeholder="Search rice, phones, solar panels…" class="min-h-11 w-full rounded-xl border-0 bg-white px-4 text-base text-stone-900 placeholder:text-stone-500 focus:outline-none focus:ring-4 focus:ring-brand-300">
+            @if (\App\Services\Assistant\PhotoSearch::enabled())
+                <a href="{{ route('search.photo') }}" class="flex min-h-11 items-center rounded-xl bg-white px-3 text-xl hover:bg-brand-50" title="Search with a photo" aria-label="Search with a photo">📷</a>
+            @endif
             <button class="min-h-11 rounded-xl bg-amber-400 px-4 font-bold text-stone-900 hover:bg-amber-300">Search</button>
         </form>
     </header>

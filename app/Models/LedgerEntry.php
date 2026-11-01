@@ -6,7 +6,7 @@ use App\Enums\LedgerType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/** One credit (+) or debit (-) on a seller's balance. Entries are never edited or deleted. */
+/** One credit (+) or debit (-) on a seller's or a rider's balance. Entries are never edited or deleted. */
 class LedgerEntry extends Model
 {
     public const UPDATED_AT = null;
@@ -21,6 +21,11 @@ class LedgerEntry extends Model
     public function seller(): BelongsTo
     {
         return $this->belongsTo(Seller::class);
+    }
+
+    public function rider(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'rider_id');
     }
 
     public function order(): BelongsTo

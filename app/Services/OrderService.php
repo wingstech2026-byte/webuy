@@ -96,7 +96,7 @@ class OrderService
     }
 
     /**
-     * Complete an order and credit the seller (total minus commission). An order with an open
+     * Complete an order and credit the seller (total minus commission) and the WiBuy rider who delivered it. An order with an open
      * dispute cannot complete: the money stays on hold until an admin decides.
      */
     public function complete(Order $order, bool $afterDispute = false): Order
@@ -111,6 +111,7 @@ class OrderService
             $order->forceFill(['status' => OrderStatus::Completed, 'completed_at' => now()])->save();
 
             $this->ledger->creditSale($order);
+            $this->ledger->creditRider($order);
 
             // Sales count only once the order is done.
             $order->items()->get()->each(

@@ -14,7 +14,7 @@
             <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <p class="text-lg font-extrabold">{{ money($payout->amount) }}</p>
-                    <p class="text-sm"><a class="font-semibold text-brand-700" href="{{ route('admin.sellers.show', $payout->seller) }}">{{ $payout->seller->shop_name }}</a> &middot; {{ $payout->operator->label() }} {{ phone_display($payout->phone) }}</p>
+                    <p class="text-sm">@if ($payout->rider) <span class="font-semibold">{{ $payout->recipientName() }}</span> @else <a class="font-semibold text-brand-700" href="{{ route('admin.sellers.show', $payout->seller) }}">{{ $payout->seller->shop_name }}</a> @endif &middot; {{ $payout->operator->label() }} {{ phone_display($payout->phone) }}</p>
                     <p class="text-xs text-stone-500">Requested {{ $payout->created_at->format('j M Y, g:ia') }}</p>
                     @if ($payout->rejection_reason) <p class="text-xs text-red-700">{{ $payout->rejection_reason }}</p> @endif
                 </div>
@@ -22,7 +22,7 @@
             </div>
             @if ($payout->status === \App\Enums\PayoutStatus::Requested)
                 <div class="mt-3 flex flex-wrap gap-2">
-                    <form method="POST" action="{{ route('admin.payouts.approve', $payout) }}" onsubmit="return confirm('Send {{ money($payout->amount) }} to this seller now?')">@csrf
+                    <form method="POST" action="{{ route('admin.payouts.approve', $payout) }}" onsubmit="return confirm('Send {{ money($payout->amount) }} to {{ $payout->rider ? 'this rider' : 'this seller' }} now?')">@csrf
                         <button class="btn btn-primary btn-sm">Approve and send</button>
                     </form>
                     <form method="POST" action="{{ route('admin.payouts.reject', $payout) }}" class="flex flex-wrap gap-2">@csrf

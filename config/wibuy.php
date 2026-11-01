@@ -82,6 +82,8 @@ return [
     'features' => [
         // AI shopping assistant. The Claude API is called from the server only; the key never reaches the app.
         'assistant' => (bool) env('ASSISTANT_ENABLED', false),
+        // Search by photo: Claude names the item in the shopper's photo, WiBuy searches with those words. Same API key.
+        'photo_search' => (bool) env('PHOTO_SEARCH_ENABLED', false),
         // WiBuy Global: import orders from China (sea or air), deposit now and balance on arrival.
         'global' => (bool) env('WIBUY_GLOBAL_ENABLED', false),
     ],

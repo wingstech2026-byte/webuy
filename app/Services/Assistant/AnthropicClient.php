@@ -18,12 +18,13 @@ class AnthropicClient
     private const API_VERSION = '2026-10-21';
 
     /**
+     * @param  string|list<array<string, mixed>>  $userContent  text, or content blocks (for example an image and text)
      * @param  array<string, mixed>  $schema  JSON schema of the answer
      * @return array{data: array<string, mixed>, input_tokens: int, output_tokens: int}
      *
      * @throws RuntimeException when the API cannot answer
      */
-    public function structured(string $system, string $userText, array $schema): array
+    public function structured(string $system, string|array $userContent, array $schema): array
     {
         $key = config('wibuy.assistant.api_key');
 
@@ -44,7 +45,7 @@ class AnthropicClient
                     'model' => config('wibuy.assistant.model'),
                     'max_tokens' => 4000,
                     'system' => $system,
-                    'messages' => [['role' => 'user', 'content' => $userText]],
+                    'messages' => [['role' => 'user', 'content' => $userContent]],
                     // Extraction is a simple task: low effort keeps it fast and cheap.
                     'output_config' => [
                         'effort' => 'low',

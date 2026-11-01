@@ -22,9 +22,11 @@ use App\Services\GroupBuyService;
 use App\Services\LedgerService;
 use App\Services\OrderService;
 use App\Services\PayoutService;
+use App\Services\ProductImportService;
 use App\Services\ProductService;
 use App\Services\RfqService;
 use App\Services\SettingsService;
+use App\Services\VariantService;
 use App\Support\GroupBuyOfferRules;
 use App\Support\Money;
 use Illuminate\Http\JsonResponse;
@@ -108,13 +110,17 @@ class SellerController extends Controller
     public function products(Request $request): JsonResponse
     {
         $seller = $this->seller($request);
-        $products = $seller->products()->with(['images', 'tiers', 'seller'])->latest('id')->get();
+        $products = $seller->products()->with(['images', 'tiers', 'seller', 'variants'])->latest('id')->get();
 
         return response()->json(['data' => $products->map(fn (Product $p) => $this->productJson($request, $p))]);
     }
 
-    /** Create (no product) or update a product. Multipart: images[] adds photos, remove_images[] deletes them. */
-    public function saveProduct(ProductRequest $request, ProductService $products, ?Product $product = null): JsonResponse
+    /**
+     * Create (no product) or update a product. Multipart: images[] adds photos, remove_images[] deletes them.
+     * Options (size, colour) are saved only when the app sends variants_sent=1, so an older app that
+     * does not know about options leaves them as they are.
+     */
+    public function saveProduct(ProductRequest $request, ProductService $products, VariantService $variants, ?Product $product = null): JsonResponse
     {
         $seller = $this->seller($request);
 
@@ -124,7 +130,56 @@ class SellerController extends Controller
 
         $saved = $products->save($seller, $request->productData(), $request->tiers(), $request->file('images', []), $request->input('remove_images', []), $product);
 
-        return response()->json(['data' => $this->productJson($request, $saved->load('images', 'tiers', 'seller'))], $product ? 200 : 201);
+        if ($request->boolean('variants_sent')) {
+            $variants->sync($saved, $request->variants());
+        }
+
+        return response()->json(['data' => $this->productJson($request, $saved->refresh()->load('images', 'tiers', 'seller', 'variants'))], $product ? 200 : 201);
+    }
+
+    /** The bulk upload columns and an example, so the app can show what to paste. */
+    public function importTemplate(ProductImportService $imports): JsonResponse
+    {
+        return response()->json([
+            'columns' => ProductImportService::COLUMNS,
+            'max_rows' => ProductImportService::MAX_ROWS,
+            'example' => $imports->template(),
+        ]);
+    }
+
+    /**
+     * Bulk upload: a CSV file, or the same rows pasted as text. Every row is checked first; with any
+     * problem nothing is added. Products are added as drafts.
+     */
+    public function import(Request $request, ProductImportService $imports): JsonResponse
+    {
+        $seller = $this->seller($request);
+        $request->validate([
+            'file' => ['required_without:csv', 'file', 'mimes:csv,txt', 'max:2048'],
+            'csv' => ['required_without:file', 'string', 'max:500000'],
+        ], [
+            'file.mimes' => 'Save your spreadsheet as CSV and upload that file.',
+            'csv.required_without' => 'Paste your product rows, or choose a CSV file.',
+        ]);
+
+        if ($request->hasFile('file')) {
+            $result = $imports->import($seller, $request->file('file')->getRealPath());
+        } else {
+            $path = tempnam(sys_get_temp_dir(), 'wibuy-import');
+            file_put_contents($path, $request->string('csv')->toString());
+
+            try {
+                $result = $imports->import($seller, $path);
+            } finally {
+                @unlink($path);
+            }
+        }
+
+        if ($result['errors'] !== []) {
+            return response()->json(['message' => 'Nothing was added. Fix these rows and try again.', 'errors' => ['rows' => $result['errors']]], 422);
+        }
+
+        return response()->json(['imported' => $result['imported'], 'message' => "{$result['imported']} products added as drafts. Add photos, then set each one to live."], 201);
     }
 
     private function productJson(Request $request, Product $product): array

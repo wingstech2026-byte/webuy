@@ -8,6 +8,7 @@ enum LedgerType: string
     case Payout = 'payout';                   // - seller asked to be paid out
     case PayoutReversal = 'payout_reversal';  // + payout was rejected or failed
     case Adjustment = 'adjustment';           // +/- admin correction
+    case DeliveryFee = 'delivery_fee';        // + a rider's fee for a delivered order that completed
 
     public function label(): string
     {
@@ -16,6 +17,7 @@ enum LedgerType: string
             self::Payout => 'Payout',
             self::PayoutReversal => 'Payout returned',
             self::Adjustment => 'Adjustment',
+            self::DeliveryFee => 'Delivery fee',
         };
     }
 }

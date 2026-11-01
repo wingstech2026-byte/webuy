@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\Operator;
 use App\Enums\PayoutStatus;
 use App\Exceptions\MarketplaceException;
 use App\Models\Payout;
@@ -12,7 +13,7 @@ use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Seller payouts. Asking for a payout takes the money off the balance straight away (so it cannot be
+ * Seller and rider payouts. Asking for a payout takes the money off the balance straight away (so it cannot be
  * asked for twice); an admin approves it and WiBuy sends it with pawaPay; if it is rejected or fails
  * the money goes back on the balance.
  */
@@ -62,6 +63,45 @@ class PayoutService
         });
     }
 
+    /**
+     * A rider withdraws delivery fees to the mobile money number they choose. Someone who is no longer
+     * a rider can still withdraw what they earned.
+     *
+     * @throws MarketplaceException
+     */
+    public function requestForRider(User $rider, string $amount, Operator $operator, string $phone): Payout
+    {
+        return DB::transaction(function () use ($rider, $amount, $operator, $phone) {
+            // Lock the rider so two quick requests cannot both spend the same balance.
+            $rider = User::lockForUpdate()->findOrFail($rider->id);
+
+            $amount = Money::from($amount);
+            $min = SettingsService::minPayout();
+
+            if (Money::cmp($amount, $min) < 0) {
+                throw new MarketplaceException('The smallest payout is '.Money::format($min).'.');
+            }
+
+            $available = $this->ledger->riderAvailable($rider);
+
+            if (Money::gt($amount, $available)) {
+                throw new MarketplaceException('You only have '.Money::format($available).' available.');
+            }
+
+            $payout = Payout::create([
+                'rider_id' => $rider->id,
+                'amount' => $amount,
+                'status' => PayoutStatus::Requested,
+                'operator' => $operator,
+                'phone' => $phone,
+            ]);
+
+            $this->ledger->debitPayout($payout);
+
+            return $payout;
+        });
+    }
+
     /** Admin approves: WiBuy sends the money. */
     public function approve(Payout $payout, User $admin): Payout
     {
@@ -102,7 +142,7 @@ class PayoutService
             ])->save();
 
             $this->ledger->reversePayout($payout, 'was rejected');
-            $this->sms->send($payout->seller->user->phone, SmsMessages::payoutRejected($payout));
+            $this->sms->send($payout->recipient()->phone, SmsMessages::payoutRejected($payout));
 
             return $payout;
         });
@@ -116,7 +156,7 @@ class PayoutService
         }
 
         $payout->forceFill(['status' => PayoutStatus::Paid, 'completed_at' => now()])->save();
-        $this->sms->send($payout->seller->user->phone, SmsMessages::payoutSent($payout));
+        $this->sms->send($payout->recipient()->phone, SmsMessages::payoutSent($payout));
     }
 
     /** pawaPay could not send it: the money goes back on the balance so the seller can ask again. */
