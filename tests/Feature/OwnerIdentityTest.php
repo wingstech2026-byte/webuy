@@ -30,6 +30,7 @@ class OwnerIdentityTest extends TestCase
         return $overrides + [
             'shop_name' => 'Aminata Fabrics', 'district' => 'Bo', 'pickup_address' => 'Bo market, stall 4',
             'payout_phone' => '077 123 456', 'payout_operator' => 'AFRIMONEY', 'offers_pickup' => '1',
+            'owner_nationality' => 'Sierra Leone', 'owner_id_type' => 'national_id',
             'owner_id_number' => 'sl 1234-5678',
             'owner_id_front' => UploadedFile::fake()->image('front.jpg', 1200, 800),
             'owner_id_back' => UploadedFile::fake()->image('back.jpg', 1200, 800),
@@ -39,7 +40,7 @@ class OwnerIdentityTest extends TestCase
     public function test_applying_needs_the_id_card_which_is_kept_private_and_encrypted(): void
     {
         $user = $this->buyer();
-        $this->actingAs($user)->get(route('sell.apply'))->assertSee('Your national ID card');
+        $this->actingAs($user)->get(route('sell.apply'))->assertSee('Your identity document')->assertSee('Your nationality');
 
         $this->actingAs($user)->post(route('sell.store'), $this->application(['owner_id_number' => '', 'owner_id_front' => null]))
             ->assertSessionHasErrors(['owner_id_number', 'owner_id_front']);
@@ -73,14 +74,15 @@ class OwnerIdentityTest extends TestCase
         $seller = Seller::factory()->pending()->create(['shop_name' => 'Old Shop']); // applied before the ID was needed
         $admin = User::factory()->admin(AdminRole::Catalogue)->create();
 
-        $this->actingAs($admin)->get(route('admin.sellers.show', $seller))->assertSee('has not sent their national ID card yet');
+        $this->actingAs($admin)->get(route('admin.sellers.show', $seller))->assertSee('has not sent their identity document yet');
         $this->actingAs($admin)->post(route('admin.sellers.approve', $seller))
-            ->assertSessionHasErrors(['general' => 'This shop cannot be approved yet: the owner has not sent their national ID card (number and photo).']);
+            ->assertSessionHasErrors(['general' => 'This shop cannot be approved yet: the owner has not sent their identity document (ID card or passport, number and photo).']);
         $this->assertSame(SellerStatus::Pending, $seller->fresh()->status);
 
         // The owner sends it from the "Sell on WiBuy" page.
-        $this->actingAs($seller->user)->get(route('sell.apply'))->assertSee('We need your national ID card before we can approve your shop.');
+        $this->actingAs($seller->user)->get(route('sell.apply'))->assertSee('We need your identity document (ID card or passport) before we can approve your shop.');
         $this->actingAs($seller->user)->post(route('sell.identity'), [
+            'owner_nationality' => 'Sierra Leone', 'owner_id_type' => 'passport',
             'owner_id_number' => 'AB998877', 'owner_id_front' => UploadedFile::fake()->image('front.jpg'),
         ])->assertRedirect(route('sell.apply'));
 
@@ -93,7 +95,7 @@ class OwnerIdentityTest extends TestCase
         $this->assertSame(SellerStatus::Approved, $seller->fresh()->status);
 
         // Once approved, the card cannot be swapped by the owner.
-        $this->actingAs($seller->user)->post(route('sell.identity'), ['owner_id_number' => 'ZZ111111', 'owner_id_front' => UploadedFile::fake()->image('x.jpg')])
+        $this->actingAs($seller->user)->post(route('sell.identity'), ['owner_nationality' => 'Sierra Leone', 'owner_id_type' => 'passport', 'owner_id_number' => 'ZZ111111', 'owner_id_front' => UploadedFile::fake()->image('x.jpg')])
             ->assertSessionHasErrors('general');
         $this->assertSame('AB998877', $seller->fresh()->owner_id_number);
     }
@@ -118,5 +120,28 @@ class OwnerIdentityTest extends TestCase
 
         $this->actingAs($admin)->get(route('admin.sellers.show', $second))->assertSee('The same ID number was sent for:')->assertSee('First Shop');
         $this->actingAs($admin)->get(route('admin.sellers.show', $first))->assertSee($second->shop_name);
+    }
+
+    public function test_sierra_leoneans_send_an_id_card_or_passport_and_others_any_official_id(): void
+    {
+        // A Sierra Leonean cannot send a residence permit.
+        $local = $this->buyer();
+        $this->actingAs($local)->post(route('sell.store'), $this->application(['owner_id_type' => 'residence_permit']))
+            ->assertSessionHasErrors(['owner_id_type' => 'Sierra Leoneans send their national ID card or passport.']);
+        $this->actingAs($local)->post(route('sell.store'), $this->application(['owner_nationality' => 'Atlantis']))->assertSessionHasErrors('owner_nationality');
+        $this->assertSame(0, Seller::count());
+
+        // A Nigerian sends the passport photo page; a Lebanese trader a residence permit.
+        $this->actingAs($this->buyer())->post(route('sell.store'), $this->application(['owner_nationality' => 'Nigeria', 'owner_id_type' => 'passport', 'owner_id_number' => 'A12345678']))
+            ->assertSessionHasNoErrors();
+        $this->actingAs($this->buyer())->post(route('sell.store'), $this->application(['shop_name' => 'Cedar Traders', 'owner_nationality' => 'Lebanon', 'owner_id_type' => 'residence_permit', 'owner_id_number' => 'RP-445566']))
+            ->assertSessionHasNoErrors();
+
+        $nigerian = Seller::where('owner_nationality', 'Nigeria')->sole();
+        $this->assertSame(['passport', 'A12345678'], [$nigerian->owner_id_type, $nigerian->owner_id_number]);
+        $this->assertSame('residence_permit', Seller::where('owner_nationality', 'Lebanon')->sole()->owner_id_type);
+
+        $this->actingAs(User::factory()->admin()->create())->get(route('admin.sellers.show', $nigerian))
+            ->assertSee('Nationality: <strong>Nigeria</strong>', false)->assertSee('Document: <strong>Passport</strong>', false);
     }
 }

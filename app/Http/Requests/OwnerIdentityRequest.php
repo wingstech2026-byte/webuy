@@ -5,7 +5,7 @@ namespace App\Http\Requests;
 use App\Http\Requests\Concerns\ValidatesOwnerIdentity;
 use Illuminate\Foundation\Http\FormRequest;
 
-/** A shop owner who already applied sends (or replaces) their national ID card. */
+/** A shop owner who already applied sends (or replaces) their identity document (ID card or passport). */
 class OwnerIdentityRequest extends FormRequest
 {
     use ValidatesOwnerIdentity;

@@ -48,6 +48,8 @@ class SellerFactory extends Factory
         return $this->state(fn () => [
             'owner_id_number' => $number,
             'owner_id_number_hash' => Seller::idFingerprint($number),
+            'owner_id_type' => 'national_id',
+            'owner_nationality' => 'Sierra Leone',
             'owner_id_front_path' => 'identity/test/front.jpg',
             'owner_id_submitted_at' => now(),
         ]);

@@ -34,6 +34,8 @@ class SellerApplicationTest extends TestCase
             'business_registration_no' => 'BRS-12345',
             'offers_delivery' => '1',
             'offers_pickup' => '1',
+            'owner_nationality' => 'Sierra Leone',
+            'owner_id_type' => 'national_id',
             'owner_id_number' => 'sl 1234-5678',
             'owner_id_front' => UploadedFile::fake()->image('id-front.jpg', 1200, 800),
         ], $overrides);

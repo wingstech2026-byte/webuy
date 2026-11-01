@@ -96,7 +96,7 @@ class SellerService
     public function approve(Seller $seller, bool $verified = false): Seller
     {
         if (! $seller->hasOwnerIdentity()) {
-            throw new MarketplaceException('This shop cannot be approved yet: the owner has not sent their national ID card (number and photo).');
+            throw new MarketplaceException('This shop cannot be approved yet: the owner has not sent their identity document (ID card or passport, number and photo).');
         }
 
         $seller->forceFill([

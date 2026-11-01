@@ -30,10 +30,10 @@
             <form method="POST" action="{{ route('sell.identity') }}" enctype="multipart/form-data" class="card mb-4 space-y-4 p-5">
                 @csrf
                 @if (! $seller->hasOwnerIdentity())
-                    <p class="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">We need your national ID card before we can approve your shop.</p>
+                    <p class="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">We need your identity document (ID card or passport) before we can approve your shop.</p>
                 @endif
                 @include('sell._identity', ['onFile' => $seller->hasOwnerIdentity()])
-                <button class="btn btn-primary">{{ $seller->hasOwnerIdentity() ? 'Send a new ID photo' : 'Send my ID card' }}</button>
+                <button class="btn btn-primary">{{ $seller->hasOwnerIdentity() ? 'Send a new document' : 'Send my document' }}</button>
             </form>
         @endif
 

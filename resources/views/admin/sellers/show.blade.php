@@ -29,11 +29,13 @@
                 @if ($seller->rejection_reason) <div class="sm:col-span-2"><dt class="font-bold text-stone-500">Rejection reason</dt><dd>{{ $seller->rejection_reason }}</dd></div> @endif
             </dl>
 
-            {{-- The owner's national ID card: check the photo matches the number and the owner's name. --}}
+            {{-- The owner's identity document: check the photo matches the number, nationality and the owner's name. --}}
             <section class="card p-5" aria-labelledby="owner-id">
-                <h2 id="owner-id" class="mb-2 font-extrabold">🪪 Owner's national ID</h2>
+                <h2 id="owner-id" class="mb-2 font-extrabold">🪪 Owner's identity document</h2>
                 @if ($seller->hasOwnerIdentity())
-                    <p class="text-sm">ID number (serial number on the card): <strong class="font-mono text-base">{{ $seller->owner_id_number }}</strong></p>
+                    @php($doc = \App\Enums\IdentityDocument::tryFrom((string) $seller->owner_id_type))
+                    <p class="text-sm">Nationality: <strong>{{ $seller->owner_nationality ?? '—' }}</strong> &middot; Document: <strong>{{ $doc?->label() ?? '—' }}</strong></p>
+                    <p class="text-sm">Number: <strong class="font-mono text-base">{{ $seller->owner_id_number }}</strong></p>
                     <p class="text-xs text-stone-500">Sent {{ $seller->owner_id_submitted_at?->format('j M Y, g:ia') }}. Check that the name on the card is {{ $seller->user->name }}.</p>
                     @if ($sameIdElsewhere->isNotEmpty())
                         <p class="mt-2 rounded-lg bg-amber-50 p-2 text-sm text-amber-900">⚠️ The same ID number was sent for:
@@ -49,7 +51,7 @@
                         @endforeach
                     </div>
                 @else
-                    <p class="rounded-lg bg-red-50 p-3 text-sm text-red-800">The owner has not sent their national ID card yet. The shop cannot be approved until they do (they add it on the "Sell on WiBuy" page).</p>
+                    <p class="rounded-lg bg-red-50 p-3 text-sm text-red-800">The owner has not sent their identity document yet. The shop cannot be approved until they do (they add it on the "Sell on WiBuy" page).</p>
                 @endif
             </section>
 

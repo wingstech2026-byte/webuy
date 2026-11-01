@@ -10,7 +10,7 @@ use Illuminate\Validation\Rule;
 
 /**
  * Used for applying to become a seller and for editing the shop profile. Applying also needs the owner's
- * national ID card, unless it is already on file (sending the application again after a rejection).
+ * identity document (ID card or passport), unless it is already on file (sending the application again after a rejection).
  */
 class SellerApplicationRequest extends FormRequest
 {

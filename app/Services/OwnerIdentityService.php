@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\IdentityDocument;
 use App\Enums\SellerStatus;
 use App\Exceptions\MarketplaceException;
 use App\Models\Seller;
@@ -13,7 +14,8 @@ use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
- * The shop owner's national ID card: the number (serial number on the card) and a photo of the front (and back).
+ * The shop owner's identity document (Sierra Leoneans: national ID card or passport; others: passport, residence
+ * permit, their own national ID card or another official ID): the number and a photo (front or passport page, back optional).
  * The photos are re-saved as plain JPEGs (no hidden GPS or camera data) on the PRIVATE default disk, never on
  * the public one; admins open them through a checked admin page. The number is encrypted in the database.
  */
@@ -28,10 +30,14 @@ class OwnerIdentityService
     }
 
     /** @throws MarketplaceException */
-    public function store(Seller $seller, string $number, UploadedFile $front, ?UploadedFile $back = null): Seller
+    public function store(Seller $seller, string $number, IdentityDocument $type, string $nationality, UploadedFile $front, ?UploadedFile $back = null): Seller
     {
         if ($seller->status === SellerStatus::Approved && $seller->hasOwnerIdentity()) {
             throw new MarketplaceException('Your ID is already checked. Contact WiBuy support to change it.');
+        }
+
+        if (! in_array($type, IdentityDocument::allowedFor($nationality), true)) {
+            throw new MarketplaceException('Sierra Leoneans send their national ID card or passport.');
         }
 
         $number = self::normalize($number);
@@ -40,8 +46,10 @@ class OwnerIdentityService
         $seller->forceFill([
             'owner_id_number' => $number,
             'owner_id_number_hash' => Seller::idFingerprint($number),
-            'owner_id_front_path' => $this->save($seller, $front),
-            'owner_id_back_path' => $back ? $this->save($seller, $back) : null,
+            'owner_id_type' => $type->value,
+            'owner_nationality' => $nationality,
+            'owner_id_front_path' => $this->savePhoto("identity/{$seller->id}", $front),
+            'owner_id_back_path' => $back ? $this->savePhoto("identity/{$seller->id}", $back) : null,
             'owner_id_submitted_at' => now(),
         ])->save();
 
@@ -58,8 +66,12 @@ class OwnerIdentityService
             : new Collection;
     }
 
-    /** @throws MarketplaceException */
-    private function save(Seller $seller, UploadedFile $photo): string
+    /**
+     * A photo of an identity document, re-saved as a plain JPEG on the private disk. Shared with buyer IDs.
+     *
+     * @throws MarketplaceException
+     */
+    public function savePhoto(string $folder, UploadedFile $photo): string
     {
         try {
             $jpeg = $this->images->shrink($photo->getRealPath(), 1600, 82);
@@ -67,7 +79,7 @@ class OwnerIdentityService
             throw new MarketplaceException('That ID photo could not be read. Please take a clear photo of the card.');
         }
 
-        $path = "identity/{$seller->id}/".Str::uuid().'.jpg';
+        $path = trim($folder, '/').'/'.Str::uuid().'.jpg';
         Storage::disk()->put($path, $jpeg); // default disk = private (never Storage::disk('public'))
 
         return $path;
