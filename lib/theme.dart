@@ -16,6 +16,7 @@ ThemeData wibuyTheme() {
 
   return ThemeData(
     useMaterial3: true,
+    fontFamily: 'Roboto', // bundled in the app (pubspec.yaml), so no font download
     colorScheme: scheme,
     scaffoldBackgroundColor: WiBuyColors.background,
     appBarTheme: const AppBarTheme(

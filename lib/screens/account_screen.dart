@@ -2,21 +2,22 @@ import 'package:flutter/material.dart';
 
 import '../api/models.dart';
 import '../config.dart';
+import '../l10n.dart';
 import '../session.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'addresses_screen.dart';
 import 'assistant_screen.dart';
+import 'business_screen.dart';
 import 'chat_screen.dart';
 import 'compare_screen.dart';
+import 'global_screen.dart';
+import 'group_buy_screen.dart';
+import 'login_screen.dart';
 import 'notifications_screen.dart';
 import 'photo_forms.dart';
 import 'rider_screen.dart';
 import 'seller_screens.dart';
-import 'business_screen.dart';
-import 'global_screen.dart';
-import 'group_buy_screen.dart';
-import 'login_screen.dart';
 
 class AccountScreen extends StatelessWidget {
   const AccountScreen({super.key});
@@ -36,9 +37,9 @@ class AccountScreen extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(children: [
-                const Text('Log in with your phone number to buy, track orders and save products.', textAlign: TextAlign.center),
+                Text(tr(context, 'Log in with your phone number to buy, track orders and save products.'), textAlign: TextAlign.center),
                 const SizedBox(height: 12),
-                FilledButton(onPressed: () => ensureLoggedIn(context), child: const Text('Log in')),
+                FilledButton(onPressed: () => ensureLoggedIn(context), child: Text(tr(context, 'Log in'))),
               ]),
             ),
           )
@@ -57,10 +58,27 @@ class AccountScreen extends StatelessWidget {
             if (user != null)
               ListTile(
                 leading: const Icon(Icons.favorite_border),
-                title: const Text('Saved products'),
+                title: Text(tr(context, 'Saved products')),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WishlistScreen())),
               ),
+            SwitchListTile(
+              secondary: const Icon(Icons.signal_cellular_alt),
+              title: Text(tr(context, 'Save data')),
+              subtitle: Text(tr(context, 'Smaller pictures, for slow or costly data')),
+              value: SessionScope.of(context).dataSaver,
+              onChanged: (on) => SessionScope.read(context).dataSaver = on,
+            ),
+            ListTile(
+              leading: const Icon(Icons.translate),
+              title: Text(tr(context, 'Language')),
+              trailing: SegmentedButton<String>(
+                showSelectedIcon: false,
+                segments: [for (final e in appLanguages.entries) ButtonSegment(value: e.key, label: Text(e.value))],
+                selected: {SessionScope.of(context).language},
+                onSelectionChanged: (s) => SessionScope.read(context).language = s.first,
+              ),
+            ),
             ListTile(
               leading: const Icon(Icons.compare_arrows),
               title: const Text('Compare & recently viewed'),
@@ -71,7 +89,7 @@ class AccountScreen extends StatelessWidget {
               if (user.isSeller)
                 ListTile(
                   leading: const Icon(Icons.storefront, color: WiBuyColors.green),
-                  title: const Text('My shop', style: TextStyle(fontWeight: FontWeight.w800)),
+                  title: Text(tr(context, 'My shop'), style: const TextStyle(fontWeight: FontWeight.w800)),
                   subtitle: const Text('Orders, products, earnings, quote requests'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SellerHomeScreen())),
@@ -91,14 +109,14 @@ class AccountScreen extends StatelessWidget {
               ),
               ListTile(
                 leading: const Icon(Icons.chat_bubble_outline),
-                title: const Text('Chat'),
+                title: Text(tr(context, 'Chat')),
                 subtitle: const Text('WiBuy support and sellers'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChatListScreen())),
               ),
               ListTile(
                 leading: const Icon(Icons.notifications_none),
-                title: const Text('Notifications'),
+                title: Text(tr(context, 'Notifications')),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsScreen())),
               ),

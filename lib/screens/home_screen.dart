@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api/models.dart';
 import '../config.dart';
+import '../l10n.dart';
 import '../session.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -19,6 +20,7 @@ class HomeData {
   HomeData(Map<String, dynamic> j)
       : categories = (j['categories'] as List).whereType<Map<String, dynamic>>().map(Category.fromJson).toList(),
         deals = _products(j['deals']),
+        forYou = _products(j['for_you'] ?? const []),
         featured = _products(j['featured']),
         newArrivals = _products(j['new_arrivals']),
         topSellers = (j['top_sellers'] as List).whereType<Map<String, dynamic>>().map(Seller.fromJson).toList();
@@ -29,6 +31,9 @@ class HomeData {
   final List<Category> categories;
   final List<Product> deals;
   final List<Product> featured;
+
+  /// From what this person looked at or bought; empty at first.
+  final List<Product> forYou;
   final List<Product> newArrivals;
   final List<Seller> topSellers;
 }
@@ -89,7 +94,7 @@ class HomeScreen extends StatelessWidget {
                 child: Row(children: [
                   const Icon(Icons.search, color: WiBuyColors.muted),
                   const SizedBox(width: 8),
-                  const Expanded(child: Text('Search rice, phones, cloth…', style: TextStyle(color: WiBuyColors.muted, fontSize: 16))),
+                  Expanded(child: Text(tr(context, 'Search rice, phones, cloth…'), style: const TextStyle(color: WiBuyColors.muted, fontSize: 16))),
                   IconButton(
                     tooltip: 'Search with a photo',
                     icon: const Icon(Icons.photo_camera_outlined, color: WiBuyColors.green),
@@ -102,7 +107,8 @@ class HomeScreen extends StatelessWidget {
         ),
       ),
       body: Loader<HomeData>(
-        load: () async => HomeData(await api.get('/home') as Map<String, dynamic>),
+        // The phone's own "recently viewed" list helps "For you" before logging in.
+        load: () async => HomeData(await api.get('/home', query: {'viewed': SessionScope.read(context).recentlyViewed.take(20).join(',')}) as Map<String, dynamic>),
         builder: (context, data, reload) => RefreshIndicator(
           onRefresh: reload,
           child: ListView(padding: const EdgeInsets.only(bottom: 24), children: [
@@ -137,8 +143,8 @@ class HomeScreen extends StatelessWidget {
                 color: WiBuyColors.orange,
                 child: ListTile(
                   leading: const Text('⚡', style: TextStyle(fontSize: 28)),
-                  title: const Text("Today's lightning deals", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
-                  subtitle: const Text('Low prices for a few hours only', style: TextStyle(color: Colors.white70)),
+                  title: Text(tr(context, "Today's lightning deals"), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+                  subtitle: Text(tr(context, 'Low prices for a few hours only'), style: const TextStyle(color: Colors.white70)),
                   trailing: const Icon(Icons.chevron_right, color: Colors.white),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DealsScreen())),
                 ),
@@ -150,8 +156,8 @@ class HomeScreen extends StatelessWidget {
                 color: WiBuyColors.green,
                 child: ListTile(
                   leading: const Text('👥', style: TextStyle(fontSize: 28)),
-                  title: const Text('Buy together, pay less', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
-                  subtitle: const Text('Group prices when enough people buy. Money back if the group does not fill.', style: TextStyle(color: Colors.white70)),
+                  title: Text(tr(context, 'Buy together, pay less'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+                  subtitle: Text(tr(context, 'Group prices when enough people buy. Money back if the group does not fill.'), style: const TextStyle(color: Colors.white70)),
                   trailing: const Icon(Icons.chevron_right, color: Colors.white),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GroupOffersScreen())),
                 ),
@@ -162,8 +168,8 @@ class HomeScreen extends StatelessWidget {
               child: Card(
                 child: ListTile(
                   leading: const Icon(Icons.near_me, color: WiBuyColors.green, size: 30),
-                  title: const Text('Shops near me', style: TextStyle(fontWeight: FontWeight.w800)),
-                  subtitle: const Text('See the closest shops on the map'),
+                  title: Text(tr(context, 'Shops near me'), style: const TextStyle(fontWeight: FontWeight.w800)),
+                  subtitle: Text(tr(context, 'See the closest shops on the map')),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NearbyShopsScreen())),
                 ),
@@ -185,6 +191,7 @@ class HomeScreen extends StatelessWidget {
                   },
               ),
             ],
+            if (data.forYou.isNotEmpty) ...[_title('✨ For you'), ProductGrid(data.forYou)],
             if (data.featured.isNotEmpty) ...[_title('Popular'), ProductGrid(data.featured)],
             if (data.newArrivals.isNotEmpty) ...[_title('New'), ProductGrid(data.newArrivals)],
           ]),
@@ -195,7 +202,7 @@ class HomeScreen extends StatelessWidget {
 
   Widget _title(String text) => Padding(
         padding: const EdgeInsets.fromLTRB(14, 18, 14, 8),
-        child: Text(text, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+        child: Builder(builder: (context) => Text(tr(context, text), style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800))),
       );
 
   Widget _strip(List<Product> products) => HorizontalStrip(

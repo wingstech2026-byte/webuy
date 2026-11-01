@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../api/api_client.dart';
 import '../api/business_models.dart';
@@ -58,6 +59,7 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
               _Tile(Icons.receipt_long, 'Orders', '${counts['new']} new · ${counts['accepted']} to ship', () => _open(const SellerOrdersScreen())),
               _Tile(Icons.inventory_2_outlined, 'Products', '${d['product_count']} products${(d['low_stock'] as List).isNotEmpty ? ' · ${(d['low_stock'] as List).length} low on stock' : ''}',
                   () => _open(const SellerProductsScreen())),
+              _Tile(Icons.bar_chart, 'Sales report', 'Best sellers, sales by week, low stock', () => _open(const SellerReportScreen())),
               _Tile(Icons.payments_outlined, 'Earnings and payouts', 'Available ${formatLe(money['available'] as String)}', () => _open(const SellerEarningsScreen())),
               _Tile(Icons.request_quote_outlined, 'Quote requests', '${d['open_rfqs']} open request(s) from buyers', () => _open(const SellerRfqsScreen())),
             ]),
@@ -98,6 +100,137 @@ class _Tile extends StatelessWidget {
           subtitle: Text(subtitle),
           trailing: const Icon(Icons.chevron_right),
           onTap: onTap,
+        ),
+      );
+}
+
+// ------------------------------------------------------------------ reports
+
+/// Sales report: totals for 7, 30 or 90 days, sales week by week, best sellers and products running low.
+class SellerReportScreen extends StatefulWidget {
+  const SellerReportScreen({super.key});
+
+  @override
+  State<SellerReportScreen> createState() => _SellerReportScreenState();
+}
+
+class _SellerReportScreenState extends State<SellerReportScreen> {
+  int _days = 30;
+
+  static const _periods = {7: '7 days', 30: '30 days', 90: '90 days'};
+
+  Widget _stat(String label, String value, [String? note]) => Expanded(
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label, style: const TextStyle(color: WiBuyColors.muted, fontSize: 12)),
+              Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
+              if (note != null) Text(note, style: const TextStyle(color: WiBuyColors.muted, fontSize: 11)),
+            ]),
+          ),
+        ),
+      );
+
+  Widget _heading(String text) => Padding(
+        padding: const EdgeInsets.fromLTRB(2, 16, 2, 6),
+        child: Text(text, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+      );
+
+  static double _amount(Object? value) => double.tryParse('$value') ?? 0;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Sales report')),
+        body: Loader<Map<String, dynamic>>(
+          key: ValueKey(_days),
+          load: () async => await SessionScope.read(context).api.get('/seller/reports', query: {'days': '$_days'}) as Map<String, dynamic>,
+          builder: (context, r, reload) {
+            final t = r['totals'] as Map<String, dynamic>;
+            final weeks = (r['weeks'] as List).whereType<Map<String, dynamic>>().toList();
+            final best = (r['best_sellers'] as List).whereType<Map<String, dynamic>>().toList();
+            final low = (r['low_stock'] as List).whereType<Map<String, dynamic>>().toList();
+            final peak = weeks.map((w) => _amount(w['sales'])).fold<double>(1, (m, v) => v > m ? v : m);
+            final before = _amount(r['previous_sales']);
+            final change = before == 0 ? null : ((_amount(t['sales']) - before) / before * 100).round();
+
+            return RefreshIndicator(
+              onRefresh: reload,
+              child: ListView(padding: const EdgeInsets.all(12), children: [
+                SegmentedButton<int>(
+                  segments: [for (final e in _periods.entries) ButtonSegment(value: e.key, label: Text(e.value))],
+                  selected: {_days},
+                  onSelectionChanged: (s) => setState(() => _days = s.first),
+                ),
+                const SizedBox(height: 8),
+                Row(children: [
+                  _stat('Sales', formatLe(t['sales'] as String), change == null ? null : '${change >= 0 ? '▲' : '▼'} ${change.abs()}% on the $_days days before'),
+                  _stat('You keep', formatLe(t['kept'] as String), 'After commission'),
+                ]),
+                Row(children: [
+                  _stat('Orders', '${t['orders']}', 'Average ${formatLe(t['average_order'] as String)}'),
+                  _stat('Items sold', '${t['items_sold']}'),
+                ]),
+                Row(children: [
+                  _stat('Buyers', '${t['buyers']}', '${t['repeat_buyers']} came back'),
+                  _stat('Lost orders', '${t['lost_orders']}', 'Refused, cancelled, refunded'),
+                ]),
+                _heading('Sales week by week'),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 14, 10, 8),
+                    child: SizedBox(
+                      height: 150,
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                        for (final w in weeks)
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 3),
+                              child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
+                                Flexible(
+                                  child: FractionallySizedBox(
+                                    heightFactor: (_amount(w['sales']) / peak).clamp(0.02, 1.0),
+                                    child: Tooltip(
+                                      message: '${formatLe(w['sales'] as String)} · ${w['orders']} orders',
+                                      child: Container(
+                                        decoration: const BoxDecoration(color: WiBuyColors.green, borderRadius: BorderRadius.vertical(top: Radius.circular(4))),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(w['label'] as String, style: const TextStyle(fontSize: 9, color: WiBuyColors.muted), maxLines: 1),
+                              ]),
+                            ),
+                          ),
+                      ]),
+                    ),
+                  ),
+                ),
+                _heading('Best sellers'),
+                if (best.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(14), child: Text('No sales in this period yet.'))),
+                for (final (i, b) in best.indexed)
+                  Card(
+                    child: ListTile(
+                      dense: true,
+                      title: Text('${i + 1}. ${b['title']}'),
+                      subtitle: Text(formatLe(b['sales'] as String)),
+                      trailing: Text('${b['quantity']} sold', style: const TextStyle(fontWeight: FontWeight.w800)),
+                    ),
+                  ),
+                _heading('Running low'),
+                if (low.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(14), child: Text('All your live products have more than 5 in stock.'))),
+                for (final p in low)
+                  Card(
+                    child: ListTile(
+                      dense: true,
+                      title: Text(p['title'] as String),
+                      trailing: StatusChip(p['stock'] == 0 ? 'Sold out' : '${p['stock']} left', status: p['stock'] == 0 ? 'cancelled' : 'paid'),
+                    ),
+                  ),
+              ]),
+            );
+          },
         ),
       );
 }
@@ -399,6 +532,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   late final _unit = TextEditingController(text: p?['unit'] as String? ?? 'piece');
   late final _moq = TextEditingController(text: '${p?['min_order_quantity'] ?? 1}');
   late bool _live = (p?['status'] ?? 'active') == 'active';
+  late bool _genuine = p?['genuine_guarantee'] == true;
+  (String, List<int>)? _video;
+  bool _removeVideo = false;
   late String _condition = p?['condition'] as String? ?? 'new';
   late final List<Map<String, dynamic>> _photos = ((p?['photos'] as List?) ?? []).whereType<Map<String, dynamic>>().toList();
   final List<int> _remove = [];
@@ -420,6 +556,17 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     super.dispose();
   }
 
+  Future<void> _pickVideo(ImageSource source) async {
+    final file = await ImagePicker().pickVideo(source: source, maxDuration: const Duration(seconds: 60));
+    if (file == null) return;
+    final bytes = await file.readAsBytes();
+    if (bytes.length > 30 * 1024 * 1024) {
+      if (mounted) showMessage(context, 'That video is too big. Keep it under 30 MB (about a minute).');
+      return;
+    }
+    if (mounted) setState(() => _video = (file.name, bytes));
+  }
+
   Future<void> _save() async {
     setState(() => _busy = true);
     final api = SessionScope.read(context).api;
@@ -432,6 +579,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       'min_order_quantity': _moq.text.trim(),
       'condition': _condition,
       'status': _live ? 'active' : 'draft',
+      'genuine_guarantee': _genuine ? '1' : '0',
+      if (_removeVideo && _video == null) 'remove_video': '1',
       for (var i = 0; i < _remove.length; i++) 'remove_images[$i]': '${_remove[i]}',
       // Options (size, colour): an empty list switches them off.
       'variants_sent': '1',
@@ -451,6 +600,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     try {
       await api.postMultipart(p == null ? '/seller/products' : '/seller/products/${p!['slug']}', fields, {
         'images[]': [for (final ph in _newPhotos) (ph.$1, ph.$2)],
+        if (_video != null) 'video': [_video!],
       });
       if (!mounted) return;
       showMessage(context, p == null ? 'Product added. Photos take a moment to process.' : 'Product saved.');
@@ -540,6 +690,23 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           ),
           const SizedBox(height: 4),
           TextField(controller: _description, maxLines: 4, decoration: const InputDecoration(labelText: 'Description')),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _genuine,
+            onChanged: (v) => setState(() => _genuine = v),
+            title: const Text('✅ I guarantee this product is genuine'),
+            subtitle: const Text('If it turns out fake, the buyer is refunded and gets compensation from your balance.'),
+          ),
+          const Text('🎥 Video (optional, up to 60 seconds)', style: TextStyle(fontWeight: FontWeight.w700)),
+          Wrap(spacing: 8, children: [
+            OutlinedButton.icon(onPressed: () => _pickVideo(ImageSource.camera), icon: const Icon(Icons.videocam), label: const Text('Record')),
+            OutlinedButton.icon(onPressed: () => _pickVideo(ImageSource.gallery), icon: const Icon(Icons.video_library), label: const Text('Choose')),
+            if (_video == null && p?['video_url'] != null && !_removeVideo)
+              TextButton(onPressed: () => setState(() => _removeVideo = true), child: const Text('Remove the video')),
+          ]),
+          if (_video != null) Text('New video: ${_video!.$1}', style: const TextStyle(color: WiBuyColors.muted, fontSize: 12)),
+          if (_video == null && p?['video_url'] != null && !_removeVideo)
+            Text('This product has a video (${p?['video_seconds'] ?? '?'}s).', style: const TextStyle(color: WiBuyColors.muted, fontSize: 12)),
           SwitchListTile(contentPadding: EdgeInsets.zero, value: _live, onChanged: (v) => setState(() => _live = v), title: const Text('Show to buyers now')),
           const Text('Wholesale prices, member prices and samples: edit on the website.', style: TextStyle(color: WiBuyColors.muted, fontSize: 12)),
           const SizedBox(height: 14),

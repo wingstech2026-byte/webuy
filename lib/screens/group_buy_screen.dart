@@ -251,6 +251,7 @@ class _JoinSheet extends StatefulWidget {
 
 class _JoinSheetState extends State<_JoinSheet> {
   int _quantity = 1;
+  int? _variantId;
   late String _method = widget.offer.collectionPoint != null ? 'pickup' : 'delivery';
   String _operator = 'ORANGE';
   late final _payerPhone = TextEditingController(text: displayPhone(SessionScope.read(context).user?.phone));
@@ -279,6 +280,10 @@ class _JoinSheetState extends State<_JoinSheet> {
   }
 
   Future<void> _send() async {
+    if (widget.offer.product.variants.isNotEmpty && _variantId == null) {
+      showMessage(context, 'Choose an option first.');
+      return;
+    }
     if (_method == 'delivery' && _addressId == null) {
       showMessage(context, 'Add a delivery address first.');
       return;
@@ -290,6 +295,7 @@ class _JoinSheetState extends State<_JoinSheet> {
       final path = widget.token == null ? '/group-buys/${widget.offer.id}/start' : '/groups/${widget.token}/join';
       final json = await SessionScope.read(context).api.post(path, {
         'quantity': _quantity,
+        if (_variantId != null) 'variant_id': _variantId,
         'method': _method,
         if (_method == 'delivery') 'address_id': _addressId,
         'operator': _operator,
@@ -317,6 +323,20 @@ class _JoinSheetState extends State<_JoinSheet> {
       child: ListView(shrinkWrap: true, padding: const EdgeInsets.all(16), children: [
         Text(widget.token == null ? 'Start a group' : 'Join the group', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
         const SizedBox(height: 10),
+        // Products with sizes or colours: each member picks their own, all at the group price.
+        if (offer.product.variants.isNotEmpty) ...[
+          const Text('Choose an option', style: TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          Wrap(spacing: 8, runSpacing: 4, children: [
+            for (final v in offer.product.variants)
+              ChoiceChip(
+                label: Text(v.stock > 0 ? v.name : '${v.name} (sold out)'),
+                selected: _variantId == v.id,
+                onSelected: v.stock > 0 ? (_) => setState(() => _variantId = v.id) : null,
+              ),
+          ]),
+          const SizedBox(height: 6),
+        ],
         Row(children: [
           const Text('How many?'),
           const Spacer(),

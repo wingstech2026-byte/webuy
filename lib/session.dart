@@ -61,6 +61,24 @@ class Session extends ChangeNotifier {
   static const _firstRunKey = 'wibuy.first_run_done';
   static const _recentKey = 'wibuy.recently_viewed';
   static const _compareKey = 'wibuy.compare';
+  static const _dataSaverKey = 'wibuy.data_saver';
+  static const _languageKey = 'wibuy.language';
+
+  /// 'en' or 'kri' (Account → Language). Kept on the phone.
+  String get language => _prefs.getString(_languageKey) ?? 'en';
+
+  set language(String code) {
+    _prefs.setString(_languageKey, code);
+    notifyListeners();
+  }
+
+  /// "Save data": small pictures instead of full-size ones (for slow or costly data). Kept on the phone.
+  bool get dataSaver => _prefs.getBool(_dataSaverKey) ?? false;
+
+  set dataSaver(bool on) {
+    _prefs.setBool(_dataSaverKey, on);
+    notifyListeners();
+  }
 
   /// Products looked at on this phone (slugs, most recent first). Kept only on the phone.
   List<String> get recentlyViewed => _prefs.getStringList(_recentKey) ?? const [];

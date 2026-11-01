@@ -134,6 +134,10 @@ class Product {
     this.seller,
     this.description,
     this.imageUrls = const [],
+    this.imageThumbUrls = const [],
+    this.genuineGuarantee = false,
+    this.videoUrl,
+    this.videoSeconds,
     this.webUrl,
     this.memberPrice,
     this.flashDeal,
@@ -171,6 +175,12 @@ class Product {
         imageUrls: j['images'] is List
             ? (j['images'] as List).whereType<Map<String, dynamic>>().map((i) => _s(i['url'])).toList()
             : const [],
+        genuineGuarantee: j['genuine_guarantee'] == true,
+        videoUrl: j['video_url'] as String?,
+        videoSeconds: (j['video_seconds'] as num?)?.toInt(),
+        imageThumbUrls: j['images'] is List
+            ? (j['images'] as List).whereType<Map<String, dynamic>>().map((i) => _s(i['thumb_url'])).toList()
+            : const [],
         webUrl: j['web_url'] as String?,
         memberPrice: j['member_price'] as String?,
         flashDeal: j['flash_deal'] is Map<String, dynamic> ? ProductDeal.fromJson(j['flash_deal'] as Map<String, dynamic>) : null,
@@ -202,6 +212,16 @@ class Product {
   final Seller? seller;
   final String? description;
   final List<String> imageUrls;
+
+  /// The same pictures, small (used when "Save data" is on).
+  final List<String> imageThumbUrls;
+
+  /// The seller promises the goods are genuine (refund plus compensation if fake).
+  final bool genuineGuarantee;
+
+  /// The seller's short video of the product, opened only when the buyer asks for it.
+  final String? videoUrl;
+  final int? videoSeconds;
   final String? webUrl;
 
   /// WiBuy Pass member price, when the seller set one.
@@ -371,6 +391,9 @@ class QuoteGroup {
     this.deliveryReason,
     this.distanceKm,
     this.deliveryWindow,
+    this.canStation = false,
+    this.stationFee,
+    this.stationDoorFee,
   });
 
   factory QuoteGroup.fromJson(Map<String, dynamic> j) {
@@ -400,8 +423,16 @@ class QuoteGroup {
       deliveryReason: j['delivery_reason'] as String?,
       distanceKm: (j['distance_km'] as num?)?.toDouble(),
       deliveryWindow: j['delivery_window'] as String?,
+      canStation: j['can_station'] == true,
+      stationFee: j['station_fee'] as String?,
+      stationDoorFee: j['station_door_fee'] as String?,
     );
   }
+
+  /// The shop has a WiBuy station near it: the buyer can collect at a station or get it brought to the door.
+  final bool canStation;
+  final String? stationFee;
+  final String? stationDoorFee;
 
   /// Why delivery is not possible (outside the area, below the minimum order...).
   final String? deliveryReason;
@@ -444,6 +475,8 @@ class Quote {
     this.canPayInParts = false,
     this.depositPercent = 30,
     this.depositAmount = '0.00',
+    this.stations = const [],
+    this.stationId,
   }) : amountDue = amountDue ?? grandTotal;
 
   factory Quote.fromJson(Map<String, dynamic> j) => Quote(
@@ -460,7 +493,15 @@ class Quote {
         canPayInParts: j['can_pay_in_parts'] == true,
         depositPercent: (j['deposit_percent'] as num?)?.toInt() ?? 30,
         depositAmount: _s(j['deposit_amount'] ?? '0.00'),
+        stations: j['stations'] is List ? (j['stations'] as List).whereType<Map<String, dynamic>>().toList() : const [],
+        stationId: (j['station_id'] as num?)?.toInt(),
       );
+
+  /// WiBuy stations the buyer can collect at, nearest first (id, name, address, district, opening_hours).
+  final List<Map<String, dynamic>> stations;
+
+  /// The station chosen for collecting, when one is.
+  final int? stationId;
 
   /// Big orders from one shop: deposit now, balance before delivery.
   final bool canPayInParts;
@@ -553,6 +594,8 @@ class Order {
     this.canRequestInspection = false,
     this.canReturn = false,
     this.returnJson,
+    this.riderDelivery,
+    this.collectStation,
   }) : amountPaid = amountPaid ?? total;
 
   factory Order.fromJson(Map<String, dynamic> j) => Order(
@@ -591,6 +634,8 @@ class Order {
         canRequestInspection: j['can_request_inspection'] == true,
         canReturn: j['can_return'] == true,
         returnJson: j['return'] as Map<String, dynamic>?,
+        riderDelivery: j['rider_delivery'] as Map<String, dynamic>?,
+        collectStation: j['collect_station'] as Map<String, dynamic>?,
       );
 
   /// Delivered and not completed yet: the buyer may send items back.
@@ -598,6 +643,12 @@ class Order {
 
   /// The return on this order (status_label, items, refund_amount, return_instructions...), if any.
   final Map<String, dynamic>? returnJson;
+
+  /// A WiBuy rider delivery: stage, label, rider name (and phone while under way), and the rider's steps.
+  final Map<String, dynamic>? riderDelivery;
+
+  /// Collect at a WiBuy station: name, address, district, opening_hours, ready.
+  final Map<String, dynamic>? collectStation;
 
   /// The total minus coupons and WiBuy Pass savings (paid by WiBuy).
   final String amountPaid;

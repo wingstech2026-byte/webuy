@@ -51,6 +51,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   /// seller id => 'delivery' | 'pickup'
   final Map<int, String> _methods = {};
 
+  /// The WiBuy station where the buyer collects ('station' method).
+  int? _stationId;
+
   Quote? _quote;
   Object? _error;
   late int? _couponId = widget.couponId;
@@ -115,6 +118,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         if (_addressId != null) 'address_id': _addressId else 'district': _district,
         'methods': _methods.map((k, v) => MapEntry('$k', v)),
         if (_couponId != null) 'coupon_id': _couponId,
+        if (_stationId != null) 'station_id': _stationId,
       }) as Map<String, dynamic>;
       final quote = Quote.fromJson(json);
       setState(() {
@@ -137,13 +141,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
-  bool get _needsAddress => _methods.values.contains('delivery');
+  bool get _needsAddress => _methods.values.contains('delivery') || _methods.values.contains('station_door');
 
   Future<void> _pay() async {
     final quote = _quote;
     if (quote == null) return;
     if (quote.groups.any((g) => !_methods.containsKey(g.sellerId))) {
       showMessage(context, 'Choose delivery or pickup for every shop.');
+      return;
+    }
+    if (_methods.values.contains('station') && _stationId == null) {
+      showMessage(context, 'Choose the WiBuy station where you will collect.');
       return;
     }
 
@@ -161,6 +169,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         },
         'note': _note.text.trim(),
         'methods': _methods.map((k, v) => MapEntry('$k', v)),
+        if (_stationId != null) 'station_id': _stationId,
         'operator': _operator,
         'payer_phone': _payerPhone.text.trim(),
         if (_couponId != null && quote.couponError == null) 'coupon_id': _couponId,
@@ -340,7 +349,37 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     selected: _methods[group.sellerId] == 'pickup',
                     onSelected: (_) => _choose(group, 'pickup'),
                   ),
+                if (group.canStation) ...[
+                  ChoiceChip(
+                    label: Text('📦 WiBuy station (${formatLe(group.stationFee)})'),
+                    selected: _methods[group.sellerId] == 'station',
+                    onSelected: (_) => _choose(group, 'station'),
+                  ),
+                  ChoiceChip(
+                    label: Text('🛵 WiBuy to my door (${formatLe(group.stationDoorFee)})'),
+                    selected: _methods[group.sellerId] == 'station_door',
+                    onSelected: (_) => _choose(group, 'station_door'),
+                  ),
+                ],
               ]),
+              if (_methods[group.sellerId] == 'station' && (_quote?.stations.isNotEmpty ?? false))
+                DropdownButtonFormField<int>(
+                  isExpanded: true,
+                  initialValue: _stationId,
+                  decoration: const InputDecoration(labelText: 'Collect at which WiBuy station?'),
+                  items: [
+                    for (final s in _quote!.stations)
+                      DropdownMenuItem(value: (s['id'] as num).toInt(), child: Text('${s['name']} · ${s['district']}', overflow: TextOverflow.ellipsis)),
+                  ],
+                  onChanged: (id) {
+                    setState(() => _stationId = id);
+                    _requote();
+                  },
+                ),
+              if (_methods[group.sellerId] == 'station')
+                const Text('We text you a code when it arrives. Show it at the station.', style: TextStyle(color: WiBuyColors.muted)),
+              if (_methods[group.sellerId] == 'station_door')
+                const Text('A WiBuy rider brings it from the station. Give the rider the code from our SMS.', style: TextStyle(color: WiBuyColors.muted)),
               if (!group.canDeliver && group.deliveryReason != null)
                 Text(group.deliveryReason!, style: const TextStyle(color: Colors.red))
               else if (!group.canDeliver && !group.canPickup)

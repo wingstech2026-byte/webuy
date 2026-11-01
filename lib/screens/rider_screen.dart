@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../session.dart';
 import '../theme.dart';
 import '../util/money.dart';
 import '../widgets/common.dart';
+import '../widgets/map_widgets.dart';
 import '../widgets/photo_picker.dart';
 
 /// A delivery job as the rider may see it: areas and fee first, the buyer's details once it is theirs.
@@ -91,6 +95,9 @@ class _RiderJobsScreenState extends State<RiderJobsScreen> {
 class RiderJobScreen extends StatefulWidget {
   const RiderJobScreen({super.key, required this.job});
 
+  /// Where the phone is (replaced in tests).
+  static Future<LatLng?> Function() locate = quietLocation;
+
   final RiderJob job;
 
   @override
@@ -104,11 +111,48 @@ class _RiderJobScreenState extends State<RiderJobScreen> {
   List<PickedPhoto> _photos = [];
   bool _busy = false;
 
+  /// While the parcel is with the rider, the position goes to the buyer every 20 seconds (only on this screen).
+  Timer? _sharing;
+  String? _sharingText;
+
+  @override
+  void initState() {
+    super.initState();
+    _followSharing();
+  }
+
   @override
   void dispose() {
+    _sharing?.cancel();
     _code.dispose();
     _note.dispose();
     super.dispose();
+  }
+
+  void _followSharing() {
+    final carrying = _job.status == 'picked_up';
+    if (carrying && _sharing == null) {
+      _sharing = Timer.periodic(const Duration(seconds: 20), (_) => _shareLocation());
+      _shareLocation();
+    } else if (!carrying) {
+      _sharing?.cancel();
+      _sharing = null;
+    }
+  }
+
+  Future<void> _shareLocation() async {
+    final point = await RiderJobScreen.locate();
+    if (!mounted) return;
+    if (point == null) {
+      setState(() => _sharingText = 'Allow location for WiBuy so the buyer can see you are on the way.');
+      return;
+    }
+    try {
+      await SessionScope.read(context).api.post('/rider/jobs/${_job.id}/location', {'lat': point.latitude, 'lng': point.longitude});
+      if (mounted) setState(() => _sharingText = 'Sharing your location with the buyer (${TimeOfDay.now().format(context)}). It stops when you deliver.');
+    } on Object {
+      // A missed update is fine: the next one comes in 20 seconds.
+    }
   }
 
   Future<void> _act(String action, {Map<String, dynamic>? body}) async {
@@ -124,6 +168,7 @@ class _RiderJobScreenState extends State<RiderJobScreen> {
         return;
       }
       setState(() => _job = RiderJob(json['data'] as Map<String, dynamic>));
+      _followSharing();
     } on Object catch (e) {
       if (mounted) showMessage(context, e);
     } finally {
@@ -157,6 +202,13 @@ class _RiderJobScreenState extends State<RiderJobScreen> {
           const SizedBox(height: 8),
           OutlinedButton(onPressed: _busy ? null : () => _act('release'), child: const Text('Give the job back')),
         ],
+        if (job.status == 'picked_up')
+          Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: const Color(0xFFFFF7E6), borderRadius: BorderRadius.circular(10)),
+            child: Text('📍 ${_sharingText ?? 'Keep this screen open: your location is shared with the buyer while you carry this parcel. It stops when you deliver.'}'),
+          ),
         if (job.status == 'picked_up') ...[
           TextField(
             controller: _code,

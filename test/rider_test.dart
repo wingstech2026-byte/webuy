@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wibuy_mobile/api/api_client.dart';
 import 'package:wibuy_mobile/screens/rider_screen.dart';
@@ -74,5 +75,30 @@ void main() {
     expect(post, contains('"operator":"AFRIMONEY"'));
     expect(post, contains('"amount":"20"'));
     expect(requests.where((r) => r.startsWith('GET')).length, 2); // reloaded after the request
+  });
+
+  testWidgets('while carrying the parcel the rider shares the location with the buyer', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    RiderJobScreen.locate = () async => const LatLng(8.48, -13.23);
+    addTearDown(() => RiderJobScreen.locate = () async => null);
+    final posts = <String>[];
+    final client = MockClient((request) async {
+      posts.add('${request.url.path} ${request.body}');
+      return http.Response(jsonEncode({'shared': true}), 200, headers: {'content-type': 'application/json'});
+    });
+    final session = Session(ApiClient(httpClient: client, baseUrl: 'http://test/api/v1'), await SharedPreferences.getInstance());
+
+    await tester.pumpWidget(SessionScope(session: session, child: MaterialApp(home: RiderJobScreen(job: RiderJob(_job('picked_up', mine: true))))));
+    await tester.pumpAndSettle();
+
+    expect(posts.single, contains('/rider/jobs/9/location'));
+    expect(posts.single, contains('"lat":8.48'));
+    expect(find.textContaining('Sharing your location with the buyer'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 21));
+    expect(posts, hasLength(2)); // again every 20 seconds
+    await tester.pumpWidget(const SizedBox()); // leaving the screen stops it
+    await tester.pump(const Duration(seconds: 25));
+    expect(posts, hasLength(2));
   });
 }

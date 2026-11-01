@@ -27,3 +27,15 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # Roboto inside the app (from the Flutter SDK, Apache 2.0, see assets/fonts/roboto_license.txt):
+  # text shows at once instead of waiting for Google's font servers on a slow connection.
+  fonts:
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/roboto-regular.ttf
+        - asset: assets/fonts/roboto-medium.ttf
+          weight: 500
+        - asset: assets/fonts/roboto-bold.ttf
+          weight: 700
+        - asset: assets/fonts/roboto-black.ttf
+          weight: 900

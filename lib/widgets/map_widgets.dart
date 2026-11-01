@@ -51,6 +51,50 @@ Future<LatLng?> currentLocation(BuildContext context) async {
   }
 }
 
+/// The phone's position without asking or showing messages (null when not allowed or unavailable).
+/// Used by a rider's job screen while they carry a parcel, never in the background.
+Future<LatLng?> quietLocation() async {
+  try {
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
+    if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) return null;
+    final p = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 15)));
+    return LatLng(p.latitude, p.longitude);
+  } on Object {
+    return null;
+  }
+}
+
+/// Where the rider is (🛵) and where the parcel is going (🏠 or the station), on a small map.
+class TrackingMap extends StatelessWidget {
+  const TrackingMap({super.key, required this.rider, this.destination, this.height = 200});
+
+  final LatLng rider;
+  final LatLng? destination;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          height: height,
+          child: FlutterMap(
+            key: ValueKey('${rider.latitude},${rider.longitude}'), // re-centre when the rider moves
+            options: destination == null
+                ? MapOptions(initialCenter: rider, initialZoom: 15)
+                : MapOptions(initialCameraFit: CameraFit.coordinates(coordinates: [rider, destination!], padding: const EdgeInsets.all(40))),
+            children: [
+              wibuyTiles(context),
+              MarkerLayer(markers: [
+                if (destination != null) Marker(point: destination!, width: 36, height: 36, child: const Icon(Icons.home, size: 32, color: WiBuyColors.green)),
+                Marker(point: rider, width: 40, height: 40, child: const Text('🛵', style: TextStyle(fontSize: 30))),
+              ]),
+            ],
+          ),
+        ),
+      );
+}
+
 /// Full-screen map with a pin in the middle: move the map until the pin is on the place, then confirm.
 /// Pops with the chosen [LatLng], or null when cancelled.
 class MapPickerScreen extends StatefulWidget {

@@ -1,25 +1,30 @@
 import 'package:flutter/material.dart';
 
 import '../api/models.dart';
+import '../l10n.dart';
 import '../session.dart';
 import '../theme.dart';
 import '../util/money.dart';
 import '../widgets/common.dart';
-import 'checkout_screen.dart';
 import 'chat_screen.dart';
+import 'checkout_screen.dart';
 import 'compare_screen.dart';
 import 'login_screen.dart';
 import 'price_cut_screen.dart';
-import 'trials_screen.dart';
 import 'shop_screen.dart';
+import 'trials_screen.dart';
 
 class ProductDetail {
   ProductDetail(Map<String, dynamic> j)
       : product = Product.fromJson(j['data'] as Map<String, dynamic>),
-        reviews = (j['reviews'] as List).whereType<Map<String, dynamic>>().map(Review.fromJson).toList();
+        reviews = (j['reviews'] as List).whereType<Map<String, dynamic>>().map(Review.fromJson).toList(),
+        alsoBought = ((j['also_bought'] as List?) ?? const []).whereType<Map<String, dynamic>>().map(Product.fromJson).toList();
 
   final Product product;
   final List<Review> reviews;
+
+  /// What other buyers of this product also paid for.
+  final List<Product> alsoBought;
 }
 
 class ProductScreen extends StatelessWidget {
@@ -138,7 +143,8 @@ class _ProductBodyState extends State<_ProductBody> {
 
   @override
   Widget build(BuildContext context) {
-    final images = p.imageUrls.isEmpty ? <String?>[p.thumbUrl] : p.imageUrls;
+    final full = SessionScope.of(context).dataSaver ? p.imageThumbUrls : p.imageUrls;
+    final images = full.isEmpty ? <String?>[p.thumbUrl] : full;
     final stock = _option?.stock ?? p.stock;
     final outOfStock = stock < 1;
     final maxQty = stock < 1 ? 1 : stock;
@@ -154,6 +160,22 @@ class _ProductBodyState extends State<_ProductBody> {
             padding: const EdgeInsets.all(16),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(p.title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+              if (p.genuineGuarantee)
+                const Padding(
+                  padding: EdgeInsets.only(top: 4),
+                  child: Text('✅ Genuine guarantee: if it is fake, you get your money back plus compensation',
+                      style: TextStyle(color: WiBuyColors.green, fontWeight: FontWeight.w700, fontSize: 13)),
+                ),
+              if (p.videoUrl != null)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    // Opens in the phone's video player: nothing downloads until the buyer taps.
+                    onPressed: () => openLink(context, p.videoUrl!),
+                    icon: const Icon(Icons.play_circle_outline),
+                    label: Text("Watch the seller's video${p.videoSeconds != null ? ' (${p.videoSeconds}s)' : ''}"),
+                  ),
+                ),
               const SizedBox(height: 8),
               Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
                 Text(formatLe(_unitPrice), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: WiBuyColors.green)),
@@ -327,8 +349,14 @@ class _ProductBodyState extends State<_ProductBody> {
                     subtitle: review.comment == null ? null : Text(review.comment!),
                   ),
               ],
+              if (widget.data.alsoBought.isNotEmpty) ...[
+                const Divider(height: 28),
+                const Text('People who bought this also bought', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+              ],
             ]),
           ),
+          if (widget.data.alsoBought.isNotEmpty) ...[ProductGrid(widget.data.alsoBought), const SizedBox(height: 16)],
         ]),
       ),
       SafeArea(
@@ -337,10 +365,10 @@ class _ProductBodyState extends State<_ProductBody> {
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
           child: Row(children: [
             Expanded(
-              child: OutlinedButton(onPressed: _busy || outOfStock ? null : _addToCart, child: const Text('Add to cart')),
+              child: OutlinedButton(onPressed: _busy || outOfStock ? null : _addToCart, child: Text(tr(context, 'Add to cart'))),
             ),
             const SizedBox(width: 10),
-            Expanded(child: FilledButton(onPressed: _busy || outOfStock ? null : _buyNow, child: const Text('Buy now'))),
+            Expanded(child: FilledButton(onPressed: _busy || outOfStock ? null : _buyNow, child: Text(tr(context, 'Buy now')))),
           ]),
         ),
       ),

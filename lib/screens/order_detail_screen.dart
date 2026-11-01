@@ -1,13 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../api/business_models.dart';
 import '../api/models.dart';
-import '../widgets/payment_prompt.dart';
-import 'photo_forms.dart';
 import '../session.dart';
 import '../theme.dart';
 import '../util/money.dart';
 import '../widgets/common.dart';
+import '../widgets/map_widgets.dart';
+import '../widgets/payment_prompt.dart';
+import '../widgets/photo_picker.dart';
+import 'photo_forms.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   const OrderDetailScreen({super.key, required this.orderId});
@@ -23,6 +28,33 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Object? _error;
   bool _busy = false;
 
+  /// While a rider carries the parcel, the order refreshes every 20 seconds (live distance and map).
+  Timer? _live;
+
+  @override
+  void dispose() {
+    _live?.cancel();
+    super.dispose();
+  }
+
+  void _followLive() {
+    final onTheWay = _order?.riderDelivery?['stage'] == 'picked_up';
+    if (onTheWay && _live == null) {
+      _live = Timer.periodic(const Duration(seconds: 20), (_) async {
+        try {
+          final json = await SessionScope.read(context).api.get('/orders/${widget.orderId}') as Map<String, dynamic>;
+          if (mounted) setState(() => _order = Order.fromJson(json['data'] as Map<String, dynamic>));
+          _followLive();
+        } on Object {
+          // try again in 20 seconds
+        }
+      });
+    } else if (!onTheWay) {
+      _live?.cancel();
+      _live = null;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -37,6 +69,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     try {
       final json = await request() as Map<String, dynamic>;
       setState(() => _order = Order.fromJson(json['data'] as Map<String, dynamic>));
+      _followLive();
     } on Object catch (e) {
       if (_order == null) {
         setState(() => _error = e);
@@ -66,18 +99,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Future<void> _review(Order order) async {
-    final result = await showModalBottomSheet<(int, String)>(
+    final result = await showModalBottomSheet<(int, String, List<PickedPhoto>)>(
       context: context,
       isScrollControlled: true,
       builder: (_) => const _ReviewSheet(),
     );
     if (result == null || !mounted) return;
-    await _run(() => SessionScope.read(context).api.post('/orders/${widget.orderId}/review', {
-          'seller_rating': result.$1,
-          if (result.$2.isNotEmpty) 'seller_comment': result.$2,
-          'items': {
-            for (final item in order.items) '${item.id}': {'rating': result.$1},
-          },
+    final (rating, comment, photos) = result;
+    // Photos go with the first product (the order's "what I got" pictures).
+    await _run(() => SessionScope.read(context).api.postMultipart('/orders/${widget.orderId}/review', {
+          'seller_rating': '$rating',
+          if (comment.isNotEmpty) 'seller_comment': comment,
+          for (final item in order.items) 'items[${item.id}][rating]': '$rating',
+        }, {
+          if (photos.isNotEmpty && order.items.isNotEmpty) 'items[${order.items.first.id}][photos][]': photos,
         }));
     if (mounted) showMessage(context, 'Thank you for your review.');
   }
@@ -142,6 +177,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 style: const TextStyle(color: WiBuyColors.muted),
               ),
               const SizedBox(height: 18),
+              if (order.collectStation != null) ...[
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.storefront, color: WiBuyColors.green),
+                    title: Text('📦 Collect at ${order.collectStation!['name']}'),
+                    subtitle: Text('${order.collectStation!['address']} (${order.collectStation!['district']})'
+                        '${order.collectStation!['opening_hours'] != null ? ' · ${order.collectStation!['opening_hours']}' : ''}\n'
+                        '${order.collectStation!['ready'] == true ? 'It is there now. Show the code from our SMS.' : 'We text you a code when it arrives.'}'),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (order.riderDelivery != null) ...[
+                _riderCard(order.riderDelivery!),
+                const SizedBox(height: 12),
+              ],
               if (order.milestonesJson.isNotEmpty) ...[
                 const Text('Paid in parts', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
                 for (final m in order.milestonesJson.map(MilestoneInfo.fromJson))
@@ -275,6 +326,52 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       );
 }
 
+/// The WiBuy rider's steps, from the rider's own taps (no location tracking).
+Widget _riderCard(Map<String, dynamic> rider) {
+  final steps = (rider['steps'] as List).whereType<Map<String, dynamic>>();
+  final tracking = rider['tracking'] as Map<String, dynamic>?;
+  final phone = rider['rider_phone'] as String?;
+
+  return Card(
+    child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('🛵 ${rider['label']}', style: const TextStyle(fontWeight: FontWeight.w800)),
+        if (tracking != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            tracking['km'] != null
+                ? 'About ${tracking['km']} km away · about ${tracking['minutes']} min${tracking['to_station'] != null ? ' to ${tracking['to_station']}' : ''}'
+                : 'The rider is on the way.',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: WiBuyColors.green),
+          ),
+          const SizedBox(height: 6),
+          TrackingMap(
+            rider: LatLng((tracking['rider']['lat'] as num).toDouble(), (tracking['rider']['lng'] as num).toDouble()),
+            destination: tracking['destination'] == null
+                ? null
+                : LatLng((tracking['destination']['lat'] as num).toDouble(), (tracking['destination']['lng'] as num).toDouble()),
+          ),
+          Text('${tracking['live'] == true ? 'Live' : 'Last seen'} · distance and time are estimates', style: const TextStyle(color: WiBuyColors.muted, fontSize: 12)),
+        ],
+        if (rider['rider_name'] != null) Text('Rider: ${rider['rider_name']}${phone != null ? ' · ${displayPhone(phone)}' : ''}'),
+        const SizedBox(height: 8),
+        for (final step in steps)
+          Row(children: [
+            Icon(step['at'] != null ? Icons.check_circle : Icons.radio_button_unchecked, size: 18, color: step['at'] != null ? WiBuyColors.green : WiBuyColors.muted),
+            const SizedBox(width: 6),
+            Text(step['label'] as String, style: TextStyle(color: step['at'] != null ? null : WiBuyColors.muted)),
+          ]),
+        if (rider['stage'] == 'picked_up')
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Text('Give the rider the 4-digit code from our SMS only when you have your goods.', style: TextStyle(color: WiBuyColors.muted, fontSize: 12)),
+          ),
+      ]),
+    ),
+  );
+}
+
 class _ReviewSheet extends StatefulWidget {
   const _ReviewSheet();
 
@@ -285,6 +382,7 @@ class _ReviewSheet extends StatefulWidget {
 class _ReviewSheetState extends State<_ReviewSheet> {
   int _rating = 5;
   final _comment = TextEditingController();
+  List<PickedPhoto> _photos = [];
 
   @override
   void dispose() {
@@ -307,8 +405,10 @@ class _ReviewSheetState extends State<_ReviewSheet> {
               ),
           ]),
           TextField(controller: _comment, maxLines: 3, decoration: const InputDecoration(hintText: 'Tell others about the seller (optional)')),
+          const SizedBox(height: 10),
+          PhotoPicker(onChanged: (p) => _photos = p, label: 'Photos of what you got (optional)'),
           const SizedBox(height: 14),
-          FilledButton(onPressed: () => Navigator.pop(context, (_rating, _comment.text.trim())), child: const Text('Send review')),
+          FilledButton(onPressed: () => Navigator.pop(context, (_rating, _comment.text.trim(), _photos)), child: const Text('Send review')),
         ]),
       );
 }
