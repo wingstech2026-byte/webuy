@@ -39,7 +39,11 @@ class AdminRolesTest extends TestCase
         $noRole = User::factory()->create(['is_admin' => true]);
         $this->actingAs($noRole)->get(route('admin.dashboard'))->assertForbidden();
 
-        $this->actingAs(User::factory()->create())->get(route('admin.dashboard'))->assertForbidden();
+        // The page says which account is logged in and offers to switch.
+        $buyer = User::factory()->create(['name' => 'Aminata Buyer']);
+        $this->actingAs($buyer)->get(route('admin.dashboard'))->assertForbidden()
+            ->assertSee('You are logged in as <strong>Aminata Buyer</strong>', false)
+            ->assertSee('Log out and use another account');
     }
 
     public function test_an_owner_gives_changes_and_removes_roles_but_not_their_own(): void
