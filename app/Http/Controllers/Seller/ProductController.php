@@ -9,14 +9,16 @@ use App\Http\Requests\Seller\ProductRequest;
 use App\Models\Category;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Services\BuyerProtectionService;
 use App\Services\ProductService;
+use App\Services\ProductVideoService;
 use App\Services\VariantService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
-    public function __construct(private ProductService $products, private VariantService $variants) {}
+    public function __construct(private ProductService $products, private VariantService $variants, private BuyerProtectionService $protection) {}
 
     public function index(Request $request)
     {
@@ -43,12 +45,23 @@ class ProductController extends Controller
                 $request->file('images', []),
             );
             $this->variants->sync($product, $request->variants());
+            $this->saveVideo($request, $product);
         } catch (MarketplaceException $e) {
             return back()->withInput()->withErrors(['general' => $e->getMessage()]);
         }
 
         return redirect()->route('seller.products.edit', $product)
             ->with('status', $product->status->value === 'active' ? 'Product saved and live. Pictures appear in a moment.' : 'Draft saved.');
+    }
+
+    /** @throws MarketplaceException */
+    private function saveVideo(ProductRequest $request, Product $product): void
+    {
+        if ($request->hasFile('video')) {
+            app(ProductVideoService::class)->attach($product, $request->file('video'));
+        } elseif ($request->boolean('remove_video')) {
+            app(ProductVideoService::class)->remove($product);
+        }
     }
 
     public function edit(Product $product)
@@ -72,11 +85,16 @@ class ProductController extends Controller
                 $product,
             );
             $this->variants->sync($product, $request->variants());
+            $this->saveVideo($request, $product);
+            // A lower price: recent buyers get the difference as a coupon (price protection).
+            $protected = $this->protection->onPriceChange($product->refresh());
         } catch (MarketplaceException $e) {
             return back()->withInput()->withErrors(['general' => $e->getMessage()]);
         }
 
-        return redirect()->route('seller.products.edit', $product)->with('status', 'Product saved.');
+        return redirect()->route('seller.products.edit', $product)->with('status', $protected
+            ? "Product saved. The price dropped, so {$protected} recent buyer(s) got the difference as a coupon (taken from your balance)."
+            : 'Product saved.');
     }
 
     public function destroy(Product $product): RedirectResponse

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\DisputeStatus;
 use App\Enums\OrderStatus;
 use App\Exceptions\MarketplaceException;
+use App\Http\Requests\DisputeRequest;
 use App\Models\Dispute;
 use App\Models\Order;
 use App\Models\User;
@@ -126,6 +127,12 @@ class DisputeService
             if ($decision === 'buyer') {
                 // The order becomes "refunded" when pawaPay confirms the refund.
                 $this->payments->refundOrder($order, 'A problem you reported was decided in your favour.');
+
+                // Fake goods sold with a genuine guarantee: a coupon on top of the refund, paid by the seller.
+                // The reason is saved as its wording (see DisputeRequest::REASONS).
+                if (in_array($dispute->reason, ['fake', DisputeRequest::REASONS['fake']], true)) {
+                    app(BuyerProtectionService::class)->compensateFakeGoods($order);
+                }
             } else {
                 $this->orders->complete($order, afterDispute: true);
             }

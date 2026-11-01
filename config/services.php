@@ -51,4 +51,15 @@ return [
         'url' => env('ROUTING_URL'), // e.g. a self-hosted OSRM: http://osrm.internal:5000
     ],
 
+    // WhatsApp Business Cloud API (Meta). Shoppers text or send a photo; WiBuy replies with matching products.
+    // Webhook: https://<your site>/webhooks/whatsapp, with WHATSAPP_VERIFY_TOKEN as the verify token.
+    'whatsapp' => [
+        'enabled' => (bool) env('WHATSAPP_ENABLED', false),
+        'token' => env('WHATSAPP_TOKEN'),                     // permanent access token
+        'phone_number_id' => env('WHATSAPP_PHONE_NUMBER_ID'),
+        'verify_token' => env('WHATSAPP_VERIFY_TOKEN'),       // any secret you choose; typed into Meta's webhook settings
+        'app_secret' => env('WHATSAPP_APP_SECRET'),           // signs every webhook call (X-Hub-Signature-256)
+        'graph_url' => env('WHATSAPP_GRAPH_URL', 'https://graph.facebook.com/v21.0'),
+    ],
+
 ];

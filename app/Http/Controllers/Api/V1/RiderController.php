@@ -12,6 +12,7 @@ use App\Models\Payout;
 use App\Services\DeliveryService;
 use App\Services\LedgerService;
 use App\Services\PayoutService;
+use App\Services\RiderTrackingService;
 use App\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -77,6 +78,14 @@ class RiderController extends Controller
         $payout = $payouts->requestForRider($rider, $request->validated('amount'), Operator::from($request->validated('operator')), $request->validated('phone'));
 
         return response()->json(['data' => ['id' => $payout->id, 'amount' => (string) $payout->amount, 'status' => $payout->status->value]], 201);
+    }
+
+    /** The app reports the rider's position while carrying a parcel (only the latest point is kept). */
+    public function location(Request $request, DeliveryJob $deliveryJob, RiderTrackingService $tracking): JsonResponse
+    {
+        $data = $request->validate(['lat' => ['required', 'numeric'], 'lng' => ['required', 'numeric']]);
+
+        return response()->json(['tracking' => $tracking->report($deliveryJob, $request->user(), (float) $data['lat'], (float) $data['lng'])]);
     }
 
     public function act(Request $request, DeliveryJob $deliveryJob, string $action): JsonResponse

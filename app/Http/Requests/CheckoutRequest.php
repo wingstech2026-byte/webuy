@@ -38,6 +38,7 @@ class CheckoutRequest extends FormRequest
             'note' => ['nullable', 'string', 'max:200'],
 
             'methods' => ['required', 'array'],
+            'station_id' => ['nullable', 'integer'], // checked by CheckoutService (must be an active station)
             'methods.*' => ['required', Rule::enum(DeliveryMethod::class)],
 
             'operator' => ['required', Rule::enum(Operator::class)],

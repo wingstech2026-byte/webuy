@@ -8,6 +8,7 @@ use App\Http\Requests\ReviewRequest;
 use App\Models\Order;
 use App\Services\OrderService;
 use App\Services\ReviewService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -29,7 +30,7 @@ class OrderController extends Controller
     {
         $this->authorize('view', $order);
 
-        $order->load('items.review', 'items.product', 'seller.logo', 'sellerReview', 'openDispute', 'disputes');
+        $order->load('items.review', 'items.product', 'seller.logo', 'sellerReview', 'openDispute', 'disputes', 'deliveryJob.rider', 'collectStation');
 
         return view('orders.show', [
             'order' => $order,
@@ -50,6 +51,14 @@ class OrderController extends Controller
         }
 
         return redirect()->route('orders.show', $order)->with('status', 'Thank you! Your order is complete. Please rate the seller below.');
+    }
+
+    /** Live delivery tracking for the order page (polled every few seconds while a rider carries it). */
+    public function tracking(Order $order): JsonResponse
+    {
+        $this->authorize('buy', $order);
+
+        return response()->json(['rider_delivery' => $order->load('deliveryJob.rider', 'deliveryJob.dropoffStation')->riderDelivery()]);
     }
 
     public function review(ReviewRequest $request, Order $order, ReviewService $reviews): RedirectResponse

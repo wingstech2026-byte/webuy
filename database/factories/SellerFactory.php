@@ -42,6 +42,17 @@ class SellerFactory extends Factory
         return $this->state(fn () => ['status' => SellerStatus::Pending, 'approved_at' => null]);
     }
 
+    /** The owner sent their national ID card (number and front photo). */
+    public function withOwnerIdentity(string $number = 'SL1234567'): static
+    {
+        return $this->state(fn () => [
+            'owner_id_number' => $number,
+            'owner_id_number_hash' => Seller::idFingerprint($number),
+            'owner_id_front_path' => 'identity/test/front.jpg',
+            'owner_id_submitted_at' => now(),
+        ]);
+    }
+
     public function rejected(): static
     {
         return $this->state(fn () => ['status' => SellerStatus::Rejected, 'approved_at' => null, 'rejection_reason' => 'Not enough information']);

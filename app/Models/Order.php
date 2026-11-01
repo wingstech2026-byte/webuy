@@ -6,6 +6,7 @@ use App\Enums\DeliveryMethod;
 use App\Enums\DisputeStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentKind;
+use App\Services\RiderTrackingService;
 use Database\Factories\OrderFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -20,6 +21,9 @@ class Order extends Model
 
     protected $guarded = [];
 
+    /** The buyer's station collection code is never sent anywhere. */
+    protected $hidden = ['collect_code_hash'];
+
     protected function casts(): array
     {
         return [
@@ -28,6 +32,7 @@ class Order extends Model
             'subtotal' => 'decimal:2',
             'delivery_fee' => 'decimal:2',
             'commission' => 'decimal:2',
+            'late_compensation' => 'decimal:2',
             'commission_percent' => 'decimal:2',
             'total' => 'decimal:2',
             'discount' => 'decimal:2',
@@ -46,6 +51,9 @@ class Order extends Model
             'completed_at' => 'datetime',
             'cancelled_at' => 'datetime',
             'refunded_at' => 'datetime',
+            'at_drop_station_at' => 'datetime',
+            'at_collect_station_at' => 'datetime',
+            'station_fees_credited_at' => 'datetime',
         ];
     }
 
@@ -125,6 +133,24 @@ class Order extends Model
         return $this->delivery_method === DeliveryMethod::Pickup;
     }
 
+    /** The seller takes it to a WiBuy station (the buyer collects there, or a rider brings it from there). */
+    public function viaStation(): bool
+    {
+        return (bool) $this->delivery_method?->viaStation();
+    }
+
+    /** The station nearest to the shop, where the seller drops the parcel. */
+    public function dropStation(): BelongsTo
+    {
+        return $this->belongsTo(Station::class, 'drop_station_id');
+    }
+
+    /** The station where the buyer collects (none for delivery to the door). */
+    public function collectStation(): BelongsTo
+    {
+        return $this->belongsTo(Station::class, 'collect_station_id');
+    }
+
     /** What the seller earns once the order completes: everything the buyer paid minus WiBuy's commission. */
     /** What the buyer really paid: the total minus WiBuy-funded discounts (coupons, WiBuy Pass free delivery). */
     /** The group-buy place this order belongs to, if any. */
@@ -141,6 +167,42 @@ class Order extends Model
     public function deliveryJob(): HasOne
     {
         return $this->hasOne(DeliveryJob::class);
+    }
+
+    /**
+     * What the buyer sees of a WiBuy rider delivery: the stage and who is bringing it. No location: the stages
+     * come from the rider's own steps. The rider's phone shows only while the delivery is under way.
+     *
+     * @return ?array{stage: string, label: string, rider_name: ?string, rider_phone: ?string, steps: list<array{label: string, at: ?string}>}
+     */
+    public function riderDelivery(): ?array
+    {
+        $job = $this->deliveryJob;
+
+        if (! $job || $job->status === DeliveryJob::CANCELLED) {
+            return null;
+        }
+
+        $active = in_array($job->status, [DeliveryJob::ASSIGNED, DeliveryJob::PICKED_UP], true);
+
+        return [
+            'stage' => $job->status,
+            'label' => match ($job->status) {
+                DeliveryJob::OPEN => 'Looking for a WiBuy rider',
+                DeliveryJob::ASSIGNED => 'The rider is going to the shop to collect your order',
+                DeliveryJob::PICKED_UP => 'The rider has your order and is coming to you',
+                default => 'Delivered by the WiBuy rider',
+            },
+            'rider_name' => $job->rider?->name,
+            'rider_phone' => $active ? $job->rider?->phone : null,
+            // Live: where the rider is, how far and how long (only while the parcel is with the rider).
+            'tracking' => app(RiderTrackingService::class)->tracking($job),
+            'steps' => [
+                ['label' => 'Rider found', 'at' => $job->assigned_at?->toIso8601String()],
+                ['label' => 'Rider collected your order', 'at' => $job->picked_up_at?->toIso8601String()],
+                ['label' => 'Handed over to you', 'at' => $job->delivered_at?->toIso8601String()],
+            ],
+        ];
     }
 
     public function milestones(): HasMany
@@ -182,7 +244,11 @@ class Order extends Model
     /** Label for the "shipped" step: pickup orders are "ready for pickup". */
     public function getShippedLabelAttribute(): string
     {
-        return $this->isPickup() ? 'Ready for pickup' : 'Shipped';
+        return match (true) {
+            $this->isPickup() => 'Ready for pickup',
+            $this->viaStation() => 'At the WiBuy station',
+            default => 'Shipped',
+        };
     }
 
     public function statusLabel(): string

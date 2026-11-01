@@ -27,7 +27,9 @@ final class AdminAccess
         'admin.users.*' => [AdminRole::Support],
         'admin.inspections.*' => [AdminRole::Support],
         'admin.agents.*' => [AdminRole::Support],
+        'admin.riders.index' => [AdminRole::Support, AdminRole::Finance], // Finance pays fees from it
         'admin.riders.*' => [AdminRole::Support],
+        'admin.stations.*' => [AdminRole::Support],
         'admin.assistant.*' => [AdminRole::Support],
 
         'admin.sellers.*' => [AdminRole::Catalogue],

@@ -72,6 +72,13 @@ class OrderResource extends JsonResource
                 ['label' => 'Delivered', 'at' => $this->delivered_at?->toIso8601String()],
                 ['label' => 'Completed', 'at' => $this->completed_at?->toIso8601String()],
             ],
+            // A WiBuy rider delivery: stage, rider and the rider's steps (no location tracking).
+            'rider_delivery' => $this->relationLoaded('deliveryJob') ? $this->riderDelivery() : null,
+            // Collect at a WiBuy station: where, and whether it is there yet (the code comes by SMS).
+            'collect_station' => $this->collect_station_id && $this->collectStation ? [
+                'name' => $this->collectStation->name, 'address' => $this->collectStation->address, 'district' => $this->collectStation->district,
+                'opening_hours' => $this->collectStation->opening_hours, 'ready' => $this->at_collect_station_at !== null,
+            ] : null,
             'can_confirm_delivery' => $isBuyer && in_array($this->status, [OrderStatus::Shipped, OrderStatus::Delivered], true),
             'can_report_problem' => $isBuyer && in_array($this->status, OrderStatus::disputable(), true),
             'can_return' => $isBuyer && $this->status === OrderStatus::Delivered && $this->returnRequest === null,

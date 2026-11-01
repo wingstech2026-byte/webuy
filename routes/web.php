@@ -25,15 +25,31 @@ use App\Http\Controllers\Seller;
 use App\Http\Controllers\SellerApplicationController;
 use App\Http\Controllers\ShareLinkController;
 use App\Http\Controllers\ShopController;
+use App\Http\Controllers\StationController;
 use App\Http\Controllers\TrialReviewController;
 use App\Http\Controllers\WebhookController;
+use App\Http\Controllers\WhatsAppWebhookController;
 use App\Http\Controllers\WishlistController;
+use App\Http\Middleware\SetLanguage;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 // ---- Public catalogue ----------------------------------------------------------
 Route::get('/', HomeController::class)->name('home');
+// "Save data": small pictures instead of full-size ones, remembered for a year on this phone.
+Route::post('/data-saver', function () {
+    $on = request()->cookie('data_saver') !== '1';
+
+    return back()->withCookie(cookie('data_saver', $on ? '1' : '0', 60 * 24 * 365))
+        ->with('status', $on ? __('Save data is on: pictures are smaller.') : __('Save data is off.'));
+})->middleware('throttle:20,1')->name('data-saver');
+// English or Krio, remembered for a year on this phone.
+Route::post('/language', function () {
+    $language = request()->validate(['language' => ['required', 'in:'.implode(',', array_keys(SetLanguage::LANGUAGES))]])['language'];
+
+    return back()->withCookie(cookie('language', $language, 60 * 24 * 365));
+})->middleware('throttle:20,1')->name('language');
 Route::get('/search', BrowseController::class)->name('search');
 Route::get('/c/{category:slug}', BrowseController::class)->name('categories.show');
 Route::get('/p/{product:slug}', [ProductController::class, 'show'])->name('products.show');
@@ -83,6 +99,8 @@ Route::post('/farm/{code}/water', [FarmPageController::class, 'water'])->middlew
 // Payment gateway callback (CSRF-exempt, see bootstrap/app.php)
 Route::post('/webhooks/pawapay', [WebhookController::class, 'pawapay'])
     ->middleware('throttle:webhook')->name('webhooks.pawapay');
+Route::get('/webhooks/whatsapp', [WhatsAppWebhookController::class, 'verify'])->middleware('throttle:webhook')->name('webhooks.whatsapp.verify');
+Route::post('/webhooks/whatsapp', [WhatsAppWebhookController::class, 'receive'])->middleware('throttle:webhook')->name('webhooks.whatsapp');
 
 // ---- Phone + SMS code login ------------------------------------------------------
 Route::middleware('guest')->group(function () {
@@ -109,6 +127,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
+    Route::get('/orders/{order}/tracking', [OrderController::class, 'tracking'])->middleware('throttle:60,1')->name('orders.tracking');
     Route::post('/orders/{order}/confirm', [OrderController::class, 'confirm'])->name('orders.confirm');
     Route::post('/orders/{order}/review', [OrderController::class, 'review'])->name('orders.review');
     Route::get('/orders/{order}/problem', [DisputeController::class, 'create'])->name('disputes.create');
@@ -122,6 +141,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/rider/jobs/{deliveryJob}', [RiderController::class, 'show'])->name('rider.jobs.show');
     Route::post('/rider/jobs/{deliveryJob}/{action}', [RiderController::class, 'act'])->whereIn('action', ['accept', 'release', 'picked-up', 'deliver'])->middleware('throttle:30,1')->name('rider.jobs.act');
     Route::get('/rider/earnings', [RiderController::class, 'earnings'])->name('rider.earnings');
+    Route::post('/rider/jobs/{deliveryJob}/location', [RiderController::class, 'location'])->middleware('throttle:20,1')->name('rider.jobs.location');
+    // WiBuy pickup stations: the partner's page
+    Route::get('/station', [StationController::class, 'index'])->name('station.index');
+    Route::post('/station/{action}', [StationController::class, 'act'])->whereIn('action', ['from-shop', 'from-rider', 'hand-over'])->middleware('throttle:30,1')->name('station.act');
     Route::post('/rider/payouts', [RiderController::class, 'requestPayout'])->middleware('throttle:10,1')->name('rider.payouts.store');
     Route::get('/orders/{order}/return', [ReturnController::class, 'create'])->name('returns.create');
     Route::post('/orders/{order}/return', [ReturnController::class, 'store'])->middleware('throttle:10,1')->name('returns.store');
@@ -141,6 +164,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/sell', [SellerApplicationController::class, 'create'])->name('sell.apply');
     Route::post('/sell', [SellerApplicationController::class, 'store'])->middleware('throttle:10,1')->name('sell.store');
+    Route::post('/sell/id-card', [SellerApplicationController::class, 'identity'])->middleware('throttle:10,1')->name('sell.identity');
 
     // Chat: the WiBuy team (support) and, behind CHAT_DIRECT_ENABLED, buyer <-> seller chats
     Route::prefix('chat')->name('chat.')->group(function () {
@@ -181,6 +205,7 @@ Route::middleware(['auth', 'seller'])->prefix('seller')->name('seller.')->group(
     Route::post('/orders/{order}/ship', [Seller\OrderController::class, 'ship'])->name('orders.ship');
     Route::post('/orders/{order}/deliver', [Seller\OrderController::class, 'deliver'])->name('orders.deliver');
 
+    Route::get('/reports', Seller\ReportController::class)->name('reports');
     Route::get('/earnings', [Seller\EarningsController::class, 'index'])->name('earnings');
     Route::post('/payouts', [Seller\EarningsController::class, 'requestPayout'])->middleware('throttle:10,1')->name('payouts.store');
 
@@ -230,6 +255,9 @@ Route::middleware(['auth', 'admin', 'audit'])->prefix('admin')->name('admin.')->
     Route::get('/staff', [Admin\StaffController::class, 'index'])->name('staff.index');
     Route::get('/riders', [Admin\RiderController::class, 'index'])->name('riders.index');
     Route::post('/riders/toggle', [Admin\RiderController::class, 'toggle'])->name('riders.toggle');
+    Route::get('/stations', [Admin\StationController::class, 'index'])->name('stations.index');
+    Route::post('/stations', [Admin\StationController::class, 'store'])->name('stations.store');
+    Route::post('/stations/{station}/toggle', [Admin\StationController::class, 'toggle'])->name('stations.toggle');
     Route::post('/staff', [Admin\StaffController::class, 'store'])->name('staff.store');
     Route::post('/staff/{user}/remove', [Admin\StaffController::class, 'remove'])->name('staff.remove');
     Route::get('/group-buys', [Admin\GroupBuyController::class, 'index'])->name('group-buys.index');
@@ -240,6 +268,7 @@ Route::middleware(['auth', 'admin', 'audit'])->prefix('admin')->name('admin.')->
     Route::get('/sellers', [Admin\SellerController::class, 'index'])->name('sellers.index');
     Route::get('/sellers/{seller:slug}', [Admin\SellerController::class, 'show'])->name('sellers.show');
     Route::post('/sellers/{seller:slug}/approve', [Admin\SellerController::class, 'approve'])->name('sellers.approve');
+    Route::get('/sellers/{seller:slug}/id-card/{side}', [Admin\SellerController::class, 'identityPhoto'])->whereIn('side', ['front', 'back'])->name('sellers.id-card');
     Route::post('/sellers/{seller:slug}/reject', [Admin\SellerController::class, 'reject'])->name('sellers.reject');
     Route::post('/sellers/{seller:slug}/suspend', [Admin\SellerController::class, 'suspend'])->name('sellers.suspend');
     Route::post('/sellers/{seller:slug}/verify', [Admin\SellerController::class, 'verify'])->name('sellers.verify');
@@ -261,6 +290,8 @@ Route::middleware(['auth', 'admin', 'audit'])->prefix('admin')->name('admin.')->
     Route::get('/payouts', [Admin\PayoutController::class, 'index'])->name('payouts.index');
     Route::post('/payouts/{payout}/approve', [Admin\PayoutController::class, 'approve'])->name('payouts.approve');
     Route::post('/payouts/{payout}/reject', [Admin\PayoutController::class, 'reject'])->name('payouts.reject');
+    Route::post('/payouts/adjust', Admin\BalanceAdjustmentController::class)->name('payouts.adjust');
+    Route::post('/payouts/rider-fee/{deliveryJob}', [Admin\RiderController::class, 'payFee'])->name('payouts.rider-fee');
 
     // Engagement: rewards, spin wheel, lightning deals, price cuts, WiBuy Farm, free trials, WiBuy Pass
     Route::get('/rewards', [Admin\EngagementController::class, 'index'])->name('rewards.index');

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\LedgerType;
 use App\Enums\OrderStatus;
 use App\Enums\PayoutStatus;
+use App\Exceptions\MarketplaceException;
 use App\Models\DeliveryJob;
 use App\Models\LedgerEntry;
 use App\Models\Order;
@@ -42,9 +43,11 @@ class LedgerService
                 'seller_id' => $order->seller_id,
                 'order_id' => $order->id,
                 'type' => LedgerType::Sale,
-                'amount' => Money::sub(Money::sub($kept, $commission), $riderJob->fee ?? '0.00'),
+                // Station orders: the whole delivery fee is for the stations and riders, never the seller.
+                'amount' => Money::sub(Money::sub($kept, $commission), $order->viaStation() ? $order->delivery_fee : ($riderJob->fee ?? '0.00')),
                 'description' => "Order {$order->number} completed".match (true) {
                     ! Money::isZero($order->returned_value ?? '0.00') => ' (returned items left out)',
+                    $order->viaStation() => ' (station fees paid to WiBuy stations and riders)',
                     $riderJob !== null => ' (delivery fee paid to the WiBuy rider)',
                     default => '',
                 },
@@ -168,6 +171,60 @@ class LedgerService
         ];
     }
 
+    /**
+     * WiBuy pays the rider's fee for an order refunded after the rider delivered it (the rider did the work).
+     * Recorded as the order's delivery fee, so it can never be paid twice.
+     *
+     * @throws MarketplaceException
+     */
+    public function payRiderForRefundedOrder(DeliveryJob $job): LedgerEntry
+    {
+        $order = $job->order;
+
+        if ($job->status !== DeliveryJob::DELIVERED || ! $job->rider_id || $order->status !== OrderStatus::Refunded) {
+            throw new MarketplaceException('Only a delivered order that was refunded afterwards can be paid this way.');
+        }
+
+        try {
+            return DB::transaction(fn () => LedgerEntry::create([
+                'rider_id' => $job->rider_id,
+                'order_id' => $order->id,
+                'type' => LedgerType::DeliveryFee,
+                'amount' => Money::from($job->fee),
+                'description' => "Delivery of order {$order->number} (paid by WiBuy: the order was refunded after delivery)",
+            ]));
+        } catch (UniqueConstraintViolationException) {
+            throw new MarketplaceException('The rider was already paid for this delivery.');
+        }
+    }
+
+    /**
+     * Take buyer compensation from a seller's balance (the buyer got a WiBuy coupon for it). With an order, at
+     * most once per order and type; the balance may go below zero until the next sale.
+     */
+    public function chargeSeller(Seller $seller, string $amount, LedgerType $type, string $description, ?Order $order = null): LedgerEntry
+    {
+        return LedgerEntry::create([
+            'seller_id' => $seller->id,
+            'order_id' => $order?->id,
+            'type' => $type,
+            'amount' => Money::sub('0.00', $amount),
+            'description' => $description,
+        ]);
+    }
+
+    /** An admin correction on a rider's balance. */
+    public function adjustRider(User $rider, string $amount, string $description): LedgerEntry
+    {
+        // No order_id: an order may have only one entry of each type, so the order goes in the description.
+        return LedgerEntry::create([
+            'rider_id' => $rider->id,
+            'type' => LedgerType::Adjustment,
+            'amount' => Money::from($amount),
+            'description' => $description,
+        ]);
+    }
+
     /** Money the rider can withdraw now. */
     public function riderAvailable(User $rider): string
     {
@@ -177,6 +234,10 @@ class LedgerService
     /** The WiBuy rider delivery of an order, when a rider handed it over. */
     private function riderJobOf(Order $order): ?DeliveryJob
     {
+        if ($order->viaStation()) {
+            return null; // station jobs are paid by StationService::creditOnCompletion
+        }
+
         return DeliveryJob::where('order_id', $order->id)->where('status', DeliveryJob::DELIVERED)->whereNotNull('rider_id')->first();
     }
 }

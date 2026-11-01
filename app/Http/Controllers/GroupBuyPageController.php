@@ -45,6 +45,7 @@ class GroupBuyPageController extends Controller
         $request->merge(array_map(fn ($v) => PhoneNumber::normalize($v) ?? $v, array_filter($request->only('payer_phone', 'recipient_phone'))));
         $data = $request->validate([
             'quantity' => ['required', 'integer', 'min:1', 'max:1000'],
+            'variant_id' => ['nullable', 'integer'],
             'method' => ['required', Rule::enum(DeliveryMethod::class)],
             'recipient_name' => ['required', 'string', 'max:80'],
             'recipient_phone' => ['required', 'regex:/^232[1-9]\d{7}$/'],
@@ -62,6 +63,7 @@ class GroupBuyPageController extends Controller
         try {
             $participant = $action([
                 (int) $data['quantity'], $details, $data['method'], Operator::from($data['operator']), $data['payer_phone'], $this->devices->hashFromRequest($request),
+                isset($data['variant_id']) ? (int) $data['variant_id'] : null,
             ]);
         } catch (MarketplaceException $e) {
             return back()->withInput()->withErrors(['general' => $e->getMessage()]);

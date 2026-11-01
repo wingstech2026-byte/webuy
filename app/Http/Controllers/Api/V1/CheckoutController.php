@@ -20,6 +20,7 @@ use App\Services\CheckoutLines;
 use App\Services\CheckoutService;
 use App\Services\CouponService;
 use App\Services\PaymentService;
+use App\Services\StationService;
 use App\Support\Money;
 use App\Support\RewardSettings;
 use Illuminate\Http\JsonResponse;
@@ -51,6 +52,7 @@ class CheckoutController extends Controller
             'address_id' => ['nullable', 'integer'],
             'lat' => ['nullable', 'numeric', 'required_with:lng'],
             'lng' => ['nullable', 'numeric', 'required_with:lat'],
+            'station_id' => ['nullable', 'integer'],
         ]);
 
         [$lines, $source] = $this->lines->resolve($request->user(), $data['product'] ?? null, $data['qty'] ?? null, (bool) ($data['sample'] ?? false), $data['variant'] ?? null);
@@ -60,7 +62,8 @@ class CheckoutController extends Controller
         $point = $saved?->hasPoint() ? ['lat' => (float) $saved->latitude, 'lng' => (float) $saved->longitude]
             : (isset($data['lat']) ? ['lat' => $data['lat'], 'lng' => $data['lng']] : null);
         $coupon = isset($data['coupon_id']) ? Coupon::where('user_id', $user->id)->find($data['coupon_id']) : null;
-        $summary = $this->checkouts->summarize($lines, $district, $data['methods'] ?? [], $user, $coupon, 'app', $point);
+        $summary = $this->checkouts->summarize($lines, $district, $data['methods'] ?? [], $user, $coupon, 'app', $point, $data['station_id'] ?? null);
+        $stations = app(StationService::class)->stationsFor($district, $point['lat'] ?? null, $point['lng'] ?? null);
 
         return response()->json([
             'source' => $source,
@@ -85,7 +88,14 @@ class CheckoutController extends Controller
                 'distance_km' => $group['distance_km'],
                 'delivery_window' => $group['delivery_window'],
                 'free_delivery' => ! Money::isZero($group['pass_discount']),
+                // WiBuy stations (null when the shop has no station near it).
+                'can_station' => $group['drop_station'] !== null,
+                'station_fee' => $group['station_fee'],
+                'station_door_fee' => $group['station_door_fee'],
             ])->values(),
+            // Stations the buyer can collect at, nearest first.
+            'stations' => $stations->map(fn ($s): array => ['id' => $s->id, 'name' => $s->name, 'address' => $s->address, 'district' => $s->district, 'opening_hours' => $s->opening_hours])->values(),
+            'station_id' => $summary['groups'] ? collect($summary['groups'])->first()['collect_station']?->id : null,
             'items_total' => $summary['items_total'],
             'delivery_total' => $summary['delivery_total'],
             'grand_total' => $summary['grand_total'],
@@ -121,7 +131,7 @@ class CheckoutController extends Controller
                 'unit_price' => $line['unit_price'] ?? null,
                 'is_sample' => $line['is_sample'] ?? null,
             ], fn ($value) => $value !== null))->all(),
-            $request->filled('address_id')
+            ['station_id' => $data['station_id'] ?? null] + ($request->filled('address_id')
                 ? GroupBuyController::fromSavedAddress(SavedAddress::where('user_id', $user->id)->findOrFail($request->integer('address_id')))
                 : [
                     'name' => $data['recipient_name'],
@@ -129,7 +139,7 @@ class CheckoutController extends Controller
                     'district' => $data['district'] ?? null,
                     'address' => $data['address'] ?? null,
                     'note' => $data['note'] ?? null,
-                ],
+                ]),
             $data['methods'],
             Operator::from($data['operator']),
             $data['payer_phone'],

@@ -16,6 +16,7 @@ use App\Services\CheckoutLines;
 use App\Services\CheckoutService;
 use App\Services\CouponService;
 use App\Services\PaymentService;
+use App\Services\StationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -44,9 +45,12 @@ class CheckoutController extends Controller
         $methods = (array) $request->input('methods', old('methods', []));
         $couponId = $request->input('coupon_id', old('coupon_id'));
         $coupon = $couponId ? Coupon::where('user_id', $user->id)->find($couponId) : null;
+        $stationId = $request->integer('station_id', (int) old('station_id')) ?: null;
 
         return view('checkout.show', [
-            'summary' => $this->checkouts->summarize($lines, $district, $methods, $user, $coupon, 'web'),
+            'summary' => $this->checkouts->summarize($lines, $district, $methods, $user, $coupon, 'web', null, $stationId),
+            'stations' => app(StationService::class)->stationsFor($district),
+            'stationId' => $stationId,
             'coupons' => $this->coupons->usable($user, 'web'),
             'couponId' => $coupon?->id,
             'source' => $source,
@@ -76,6 +80,7 @@ class CheckoutController extends Controller
                     'district' => $data['district'] ?? null,
                     'address' => $data['address'] ?? null,
                     'note' => $data['note'] ?? null,
+                    'station_id' => $data['station_id'] ?? null,
                 ],
                 $data['methods'],
                 Operator::from($data['operator']),

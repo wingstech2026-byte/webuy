@@ -4,14 +4,17 @@ namespace App\Http\Requests;
 
 use App\Enums\Operator;
 use App\Http\Requests\Concerns\NormalizesPhones;
-use App\Http\Requests\Concerns\ValidatesImages;
+use App\Http\Requests\Concerns\ValidatesOwnerIdentity;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-/** Used for applying to become a seller and for editing the shop profile. */
+/**
+ * Used for applying to become a seller and for editing the shop profile. Applying also needs the owner's
+ * national ID card, unless it is already on file (sending the application again after a rejection).
+ */
 class SellerApplicationRequest extends FormRequest
 {
-    use NormalizesPhones, ValidatesImages;
+    use NormalizesPhones, ValidatesOwnerIdentity;
 
     public function authorize(): bool
     {
@@ -21,6 +24,7 @@ class SellerApplicationRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->normalizePhoneFields('payout_phone');
+        $this->normalizeOwnerIdNumber();
         $this->merge([
             'offers_delivery' => $this->boolean('offers_delivery'),
             'offers_pickup' => $this->boolean('offers_pickup'),
@@ -41,7 +45,12 @@ class SellerApplicationRequest extends FormRequest
             'offers_delivery' => ['boolean'],
             'offers_pickup' => ['boolean'],
             'logo' => $this->imageRules(),
-        ];
+        ] + ($this->isApplication() ? $this->ownerIdentityRules(! $this->user()->seller?->hasOwnerIdentity()) : []);
+    }
+
+    private function isApplication(): bool
+    {
+        return $this->routeIs('sell.store');
     }
 
     public function after(): array
@@ -63,6 +72,6 @@ class SellerApplicationRequest extends FormRequest
             'payout_phone.required' => 'Please enter the mobile money number we should pay you on.',
             'payout_phone.regex' => $this->phoneMessage(),
             'payout_operator.required' => 'Please choose Orange Money or Afrimoney.',
-        ] + $this->imageMessages('logo', 'logo');
+        ] + $this->imageMessages('logo', 'logo') + $this->ownerIdentityMessages();
     }
 }

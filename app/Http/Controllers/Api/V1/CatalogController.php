@@ -10,6 +10,7 @@ use App\Http\Resources\Api\V1\ReviewResource;
 use App\Http\Resources\Api\V1\SellerResource;
 use App\Models\Product;
 use App\Models\Seller;
+use App\Services\RecommendationService;
 use App\Services\SearchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,11 +21,16 @@ class CatalogController extends Controller
 {
     public function __construct(private SearchService $search) {}
 
-    /** The app's start screen, in one request (fewer round trips on slow data). */
-    public function home(): JsonResponse
+    /** The app's start screen, in one request (fewer round trips on slow data). ?viewed=slug,slug from the phone. */
+    public function home(Request $request, RecommendationService $recommendations): JsonResponse
     {
+        $user = $request->user('sanctum');
+        $viewed = array_slice(array_filter(explode(',', (string) $request->query('viewed'))), 0, 20);
+        $viewedIds = $viewed ? Product::whereIn('slug', $viewed)->pluck('id')->all() : [];
+
         return response()->json([
             'categories' => CategoryResource::collection($this->search->categoryTree()),
+            'for_you' => ProductResource::collection($recommendations->forYou($user, $viewedIds, 10)),
             'deals' => ProductResource::collection($this->search->deals()),
             'featured' => ProductResource::collection($this->search->featured()),
             'new_arrivals' => ProductResource::collection($this->search->newArrivals()),
@@ -72,14 +78,19 @@ class CatalogController extends Controller
         return ProductResource::collection($this->search->search($filters, 20));
     }
 
-    public function product(Product $product): JsonResponse
+    public function product(Request $request, Product $product, RecommendationService $recommendations): JsonResponse
     {
         abort_unless($product->isListed(), 404);
 
         $product->load(['seller.logo', 'category', 'images', 'tiers', 'variants']);
 
+        if ($user = $request->user('sanctum')) {
+            $recommendations->recordView($user, $product);
+        }
+
         return response()->json([
             'data' => (new ProductResource($product))->detailed(),
+            'also_bought' => ProductResource::collection($recommendations->alsoBought($product, 6)),
             'reviews' => ReviewResource::collection($product->reviews()->with('buyer', 'images')->limit(10)->get()),
         ]);
     }

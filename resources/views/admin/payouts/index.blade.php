@@ -3,6 +3,29 @@
 @section('admin')
     <h1 class="mb-4 text-2xl font-extrabold">Payouts</h1>
 
+    {{-- A correction on a shop's or rider's balance. The Riders page links here with the fields filled in. --}}
+    <details class="card mb-4 p-4" @if ($errors->hasAny(['for', 'phone', 'amount', 'reason']) || request()->has('phone')) open @endif>
+        <summary class="cursor-pointer font-bold">Adjust a balance</summary>
+        <form method="POST" action="{{ route('admin.payouts.adjust') }}" class="mt-3 grid gap-3 sm:grid-cols-2">
+            @csrf
+            <div><label class="label" for="adj-for">Whose balance</label>
+                <select id="adj-for" name="for" class="input">
+                    <option value="seller" @selected(old('for', request('for')) === 'seller')>A shop</option>
+                    <option value="rider" @selected(old('for', request('for')) === 'rider')>A rider</option>
+                </select></div>
+            <div><label class="label" for="adj-phone">Their phone number</label>
+                <input id="adj-phone" name="phone" inputmode="tel" required class="input" value="{{ old('phone', request('phone')) }}" placeholder="076 123 456">
+                @error('phone') <p class="field-error">{{ $message }}</p> @enderror</div>
+            <div><label class="label" for="adj-amount">Amount (20 adds, -20 takes away)</label>
+                <input id="adj-amount" name="amount" required class="input" value="{{ old('amount', request('amount')) }}">
+                @error('amount') <p class="field-error">{{ $message }}</p> @enderror</div>
+            <div><label class="label" for="adj-reason">Reason (they see it)</label>
+                <input id="adj-reason" name="reason" required maxlength="150" class="input" value="{{ old('reason', request('reason')) }}">
+                @error('reason') <p class="field-error">{{ $message }}</p> @enderror</div>
+            <div class="sm:col-span-2"><button class="btn btn-primary btn-sm" onclick="return confirm('Change this balance?')">Save adjustment</button></div>
+        </form>
+    </details>
+
     <div class="mb-4 flex flex-wrap gap-2">
         @foreach (\App\Enums\PayoutStatus::cases() as $case)
             <a href="{{ route('admin.payouts.index', ['status' => $case->value]) }}" class="badge py-2 text-sm {{ $status === $case ? 'bg-brand-700 text-white' : 'bg-white ring-1 ring-stone-200' }}">{{ $case->label() }}</a>

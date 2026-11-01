@@ -13,7 +13,7 @@ class OrderItem extends Model
 
     protected function casts(): array
     {
-        return ['unit_price' => 'decimal:2', 'line_total' => 'decimal:2'];
+        return ['unit_price' => 'decimal:2', 'line_total' => 'decimal:2', 'genuine_guarantee' => 'boolean', 'price_protection_amount' => 'decimal:2'];
     }
 
     public function order(): BelongsTo

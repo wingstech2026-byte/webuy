@@ -8,6 +8,7 @@
             'seller.dashboard' => ['Overview', 'seller.dashboard'],
             'seller.orders.*' => ['Orders', 'seller.orders.index'],
             'seller.products.*' => ['Products', 'seller.products.index'],
+            'seller.reports' => ['Reports', 'seller.reports'],
             'seller.earnings' => ['Earnings', 'seller.earnings'],
             'seller.reviews' => ['Ratings', 'seller.reviews'],
             'seller.promotions*' => ['Promotions', 'seller.promotions'],

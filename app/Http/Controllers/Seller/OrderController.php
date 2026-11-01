@@ -61,6 +61,10 @@ class OrderController extends Controller
 
     public function ship(ReasonRequest $request, Order $order): RedirectResponse
     {
+        if ($order->viaStation()) {
+            return back()->withErrors(['general' => 'Take this order to the WiBuy station. The station marks it when they receive it.']);
+        }
+
         $message = $order->isPickup() ? 'Marked as ready for pickup. The buyer was told.' : 'Marked as shipped. The buyer was told.';
 
         return $this->run($order, fn () => $this->orders->ship($order, $request->validated('reason')), $message);
@@ -68,6 +72,10 @@ class OrderController extends Controller
 
     public function deliver(Order $order): RedirectResponse
     {
+        if ($order->viaStation()) {
+            return back()->withErrors(['general' => 'The WiBuy station or rider hands this order to the buyer.']);
+        }
+
         return $this->run($order, fn () => $this->orders->markDelivered($order), 'Marked as delivered. The buyer was asked to confirm.');
     }
 

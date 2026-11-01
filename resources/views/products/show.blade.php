@@ -47,16 +47,23 @@
         {{-- Gallery: only the first picture loads at full size; the rest are lazy thumbnails. --}}
         <div>
             @php($ready = $product->images->where('status', 'ready')->values())
+            @if ($product->video_url)
+                {{-- Nothing downloads until the buyer presses play (preload none): fine on slow or costly data. --}}
+                <div class="card mb-2 overflow-hidden">
+                    <video src="{{ $product->video_url }}" controls preload="none" playsinline @if ($ready->isNotEmpty()) poster="{{ $ready[0]->thumb_url }}" @endif class="aspect-square w-full bg-black object-contain" aria-label="Video of {{ $product->title }}"></video>
+                    <p class="px-3 py-1 text-xs text-stone-500">🎥 Video from the seller &middot; {{ $product->video_seconds }}s</p>
+                </div>
+            @endif
             @if ($ready->isEmpty())
                 <x-product-image :product="$product" class="aspect-square w-full rounded-2xl" />
             @else
                 <div class="card overflow-hidden">
-                    <img src="{{ $ready[0]->url }}" alt="{{ $product->title }}" class="aspect-square w-full bg-stone-100 object-contain" data-gallery-main>
+                    <img src="{{ data_saver() ? $ready[0]->thumb_url : $ready[0]->url }}" alt="{{ $product->title }}" class="aspect-square w-full bg-stone-100 object-contain" data-gallery-main>
                 </div>
                 @if ($ready->count() > 1)
                     <div class="mt-2 flex gap-2 overflow-x-auto pb-1">
                         @foreach ($ready as $i => $image)
-                            <a href="{{ $image->url }}" data-gallery-thumb="{{ $image->url }}" class="block shrink-0 overflow-hidden rounded-lg ring-2 {{ $i === 0 ? 'ring-brand-600' : 'ring-transparent' }}">
+                            <a href="{{ $image->url }}" data-gallery-thumb="{{ data_saver() ? $image->thumb_url : $image->url }}" class="block shrink-0 overflow-hidden rounded-lg ring-2 {{ $i === 0 ? 'ring-brand-600' : 'ring-transparent' }}">
                                 <img src="{{ $image->thumb_url }}" alt="Picture {{ $i + 1 }}" loading="lazy" decoding="async" class="size-16 object-cover">
                             </a>
                         @endforeach
@@ -71,6 +78,7 @@
                 <div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-stone-600">
                     <x-stars :rating="$product->rating_avg" :count="$product->rating_count" />
                     <span>&middot; {{ $product->condition->label() }}</span>
+                    @if ($product->genuine_guarantee) <span class="badge bg-brand-100 text-brand-800" title="If it is fake you get your money back plus compensation">✅ Genuine guarantee</span> @endif
                     @if ($product->sold_count > 0) <span>&middot; {{ $product->sold_count }} sold</span> @endif
                 </div>
             </div>
@@ -148,8 +156,8 @@
                             @error('quantity') <p class="field-error">{{ $message }}</p> @enderror
                         </div>
                         <div class="grid gap-2 sm:grid-cols-2">
-                            <button class="btn btn-primary" name="buy_now" value="0">Add to cart</button>
-                            <button class="btn btn-outline" name="buy_now" value="1">Buy now</button>
+                            <button class="btn btn-primary" name="buy_now" value="0">{{ __('Add to cart') }}</button>
+                            <button class="btn btn-outline" name="buy_now" value="1">{{ __('Buy now') }}</button>
                         </div>
                         @guest
                             <p class="text-xs text-stone-500">You will be asked to log in with your phone number.</p>
@@ -201,7 +209,7 @@
 
             @if ($product->description)
                 <div class="card p-4">
-                    <h2 class="mb-2 font-bold">About this product</h2>
+                    <h2 class="mb-2 font-bold">{{ __('About this product') }}</h2>
                     <p class="whitespace-pre-line text-stone-700">{{ $product->description }}</p>
                 </div>
             @endif
@@ -210,7 +218,7 @@
 
     {{-- Reviews --}}
     <section class="mt-8" aria-labelledby="reviews">
-        <h2 id="reviews" class="mb-3 text-xl font-extrabold">Reviews</h2>
+        <h2 id="reviews" class="mb-3 text-xl font-extrabold">{{ __('Reviews') }}</h2>
         @forelse ($reviews as $review)
             <div class="card mb-2 p-4">
                 <div class="flex items-center justify-between gap-2">
@@ -234,6 +242,16 @@
         @endforelse
     </section>
 
+    @if ($alsoBought->isNotEmpty())
+        <section class="mt-8" aria-labelledby="also-bought">
+            <h2 id="also-bought" class="mb-3 text-xl font-extrabold">{{ __('People who bought this also bought') }}</h2>
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                @foreach ($alsoBought as $other)
+                    <x-product-card :product="$other" />
+                @endforeach
+            </div>
+        </section>
+    @endif
     @if ($more->isNotEmpty())
         <section class="mt-8">
             <h2 class="mb-3 text-xl font-extrabold">More from {{ $product->seller->shop_name }}</h2>
@@ -247,7 +265,7 @@
     @if ($recent->isNotEmpty())
         <section class="mt-8" aria-labelledby="recent">
             <div class="mb-3 flex items-center justify-between">
-                <h2 id="recent" class="text-lg font-extrabold">You looked at</h2>
+                <h2 id="recent" class="text-lg font-extrabold">{{ __('You looked at') }}</h2>
                 <a href="{{ route('compare.index') }}" class="text-sm font-semibold text-brand-700">Compare &rarr;</a>
             </div>
             <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">

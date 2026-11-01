@@ -7,6 +7,7 @@ use App\Models\GroupBuy;
 use App\Models\GroupBuyCampaign;
 use App\Models\GroupBuyParticipant;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use Tests\Concerns\Marketplace;
 use Tests\TestCase;
 
@@ -85,5 +86,32 @@ class GroupBuyWebsiteTest extends TestCase
             ->assertSessionHasErrors(['district', 'address']);
 
         $this->assertSame(0, Checkout::count());
+    }
+
+    public function test_members_pick_their_own_size_or_colour_at_the_group_price(): void
+    {
+        $small = ProductVariant::factory()->create(['product_id' => $this->product->id, 'name' => 'Small bag', 'stock' => 4, 'price' => '120.00']);
+        $large = ProductVariant::factory()->create(['product_id' => $this->product->id, 'name' => 'Large bag', 'stock' => 1]);
+
+        $this->actingAs($this->buyer())->get(route('products.show', $this->product))->assertOk()->assertSee('Choose an option')->assertSee('Small bag');
+
+        // An option is needed, and it must have the stock.
+        $leader = $this->buyer();
+        $this->actingAs($leader)->post(route('group-buys.start', $this->campaign), $this->form())->assertSessionHasErrors('general');
+        $this->actingAs($leader)->post(route('group-buys.start', $this->campaign), $this->form(['variant_id' => $large->id, 'quantity' => 2]))->assertSessionHasErrors('general');
+        $this->assertSame(0, Checkout::count());
+        $this->assertSame(0, GroupBuy::count()); // a failed start leaves no empty group behind
+
+        $this->actingAs($leader)->post(route('group-buys.start', $this->campaign), $this->form(['variant_id' => $small->id, 'quantity' => 2]))->assertRedirect();
+        $this->pay(Checkout::sole());
+        $friend = $this->buyer();
+        $this->actingAs($friend)->post(route('groups.join', GroupBuy::sole()), $this->form(['variant_id' => $large->id]))->assertRedirect();
+        $this->pay(Checkout::where('buyer_id', $friend->id)->sole());
+
+        // The group price, not the option's own price; stock taken from each option.
+        $this->assertSame(['180.00', '90.00'], Checkout::orderBy('id')->pluck('total')->all());
+        $this->assertSame(['Small bag', 'Large bag'], GroupBuyParticipant::orderBy('id')->get()->map(fn ($p) => $p->order->items()->value('variant_name'))->all());
+        $this->assertSame([2, 0], [$small->fresh()->stock, $large->fresh()->stock]);
+        $this->assertSame(GroupBuy::SUCCEEDED, GroupBuy::sole()->status);
     }
 }

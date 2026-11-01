@@ -242,4 +242,19 @@ class ProductManagementTest extends TestCase
 
         $this->actingAs($this->buyer())->post(route('admin.products.suspend', $product))->assertForbidden();
     }
+
+    public function test_the_edit_page_does_not_nest_the_delete_form_inside_the_save_form(): void
+    {
+        $product = $this->makeProduct();
+
+        $html = $this->actingAs($product->seller->user)->get(route('seller.products.edit', $product))->assertOk()->getContent();
+
+        // Browsers ignore a <form> inside a <form>: its hidden "DELETE" would join the save form and
+        // "Save product" would delete the product. The save form must close before another form opens.
+        $start = strpos($html, '<form method="POST" enctype="multipart/form-data"');
+        $end = strpos($html, '</form>', $start);
+        $this->assertSame(0, substr_count(substr($html, $start + 5, $end - $start - 5), '<form'));
+        $this->assertStringNotContainsString('value="DELETE"', substr($html, $start, $end - $start));
+        $this->assertStringContainsString('form="delete-product"', $html);
+    }
 }

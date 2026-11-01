@@ -16,6 +16,7 @@ class DisputeRequest extends FormRequest
         'not_as_described' => 'The items are not as described',
         'damaged' => 'The items are damaged or broken',
         'wrong_items' => 'I got the wrong items',
+        'fake' => 'The items are fake (not genuine)',
         'missing_items' => 'Some items are missing',
         'other' => 'Something else',
     ];

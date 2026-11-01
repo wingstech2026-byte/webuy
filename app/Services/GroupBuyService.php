@@ -32,26 +32,33 @@ class GroupBuyService
         private SmsService $sms,
     ) {}
 
-    /** @throws MarketplaceException */
-    public function start(User $leader, GroupBuyCampaign $campaign, int $quantity, array $details, string $method, Operator $operator, string $phone, ?string $deviceHash): GroupBuyParticipant
+    /**
+     * $variantId is the size or colour each member picks when the product has options (members may pick different ones).
+     *
+     * @throws MarketplaceException
+     */
+    public function start(User $leader, GroupBuyCampaign $campaign, int $quantity, array $details, string $method, Operator $operator, string $phone, ?string $deviceHash, ?int $variantId = null): GroupBuyParticipant
     {
         if (! $campaign->isOpen() || ! $campaign->product->isListed()) {
             throw new MarketplaceException('This group offer has ended.');
         }
 
-        $group = GroupBuy::create([
-            'group_buy_campaign_id' => $campaign->id,
-            'leader_id' => $leader->id,
-            'token' => Str::lower(Str::random(10)),
-            'status' => GroupBuy::OPEN,
-            'expires_at' => now()->addHours(max(1, $campaign->hours)),
-        ]);
+        // One transaction: when the leader's own place fails (no stock, wrong area...), no empty group is left behind.
+        return DB::transaction(function () use ($leader, $campaign, $quantity, $details, $method, $operator, $phone, $deviceHash, $variantId) {
+            $group = GroupBuy::create([
+                'group_buy_campaign_id' => $campaign->id,
+                'leader_id' => $leader->id,
+                'token' => Str::lower(Str::random(10)),
+                'status' => GroupBuy::OPEN,
+                'expires_at' => now()->addHours(max(1, $campaign->hours)),
+            ]);
 
-        return $this->join($leader, $group, $quantity, $details, $method, $operator, $phone, $deviceHash);
+            return $this->join($leader, $group, $quantity, $details, $method, $operator, $phone, $deviceHash, $variantId);
+        });
     }
 
     /** @throws MarketplaceException */
-    public function join(User $user, GroupBuy $group, int $quantity, array $details, string $method, Operator $operator, string $phone, ?string $deviceHash): GroupBuyParticipant
+    public function join(User $user, GroupBuy $group, int $quantity, array $details, string $method, Operator $operator, string $phone, ?string $deviceHash, ?int $variantId = null): GroupBuyParticipant
     {
         $campaign = $group->campaign()->with('product.seller')->first();
 
@@ -77,7 +84,7 @@ class GroupBuyService
             throw new MarketplaceException('This phone is already in the group with another account.');
         }
 
-        return DB::transaction(function () use ($user, $group, $campaign, $quantity, $details, $method, $operator, $phone, $deviceHash) {
+        return DB::transaction(function () use ($user, $group, $campaign, $quantity, $details, $method, $operator, $phone, $deviceHash, $variantId) {
             $locked = GroupBuy::lockForUpdate()->find($group->id);
             $taken = GroupBuyParticipant::where('group_buy_id', $locked->id)->whereIn('status', ['pending', 'paid'])->count();
 
@@ -99,7 +106,8 @@ class GroupBuyService
 
             $checkout = $this->checkouts->place(
                 $user,
-                [['product_id' => $campaign->product_id, 'quantity' => $quantity, 'unit_price' => (string) $campaign->group_price, 'is_group' => true]],
+                // Checkout checks the option belongs to the product, is on sale and has the stock.
+                [['product_id' => $campaign->product_id, 'variant_id' => $variantId, 'quantity' => $quantity, 'unit_price' => (string) $campaign->group_price, 'is_group' => true]],
                 $details,
                 [$campaign->seller_id => $method],
                 $operator,

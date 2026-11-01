@@ -15,6 +15,7 @@ use App\Models\OrderItem;
 use App\Models\OrderMilestone;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\Station;
 use App\Models\User;
 use App\Sms\SmsMessages;
 use App\Support\Money;
@@ -41,14 +42,17 @@ class CheckoutService
      * What the checkout page shows: items, delivery fee and total per seller, and the grand total.
      *
      * @param  Collection<int, array{product: Product, quantity: int}>  $lines  products with seller.deliveryAreas and tiers loaded
-     * @param  array<int, string>  $methods  seller id => 'delivery' | 'pickup'
+     * @param  array<int, string>  $methods  seller id => 'delivery' | 'pickup' | 'station' | 'station_door'
      * @param  ?User  $buyer  for WiBuy Pass member prices and free delivery
+     * @param  ?int  $stationId  the WiBuy station where the buyer collects ('station' method)
      * @param  ?Coupon  $coupon  a coupon the buyer chose; when it does not apply, coupon_error says why
      * @return array{groups: array<int, array<string, mixed>>, items_total: string, delivery_total: string, grand_total: string, discount_total: string, amount_due: string, coupon: ?Coupon, coupon_discount: string, coupon_error: ?string, pass_savings: string, is_member: bool}
      */
-    public function summarize(Collection $lines, ?string $district, array $methods = [], ?User $buyer = null, ?Coupon $coupon = null, string $channel = 'web', ?array $point = null): array
+    public function summarize(Collection $lines, ?string $district, array $methods = [], ?User $buyer = null, ?Coupon $coupon = null, string $channel = 'web', ?array $point = null, ?int $stationId = null): array
     {
         $geo = app(GeoService::class);
+        $stations = app(StationService::class);
+        $collectStation = $stationId ? Station::active()->find($stationId) : null;
         $lat = isset($point['lat']) && $geo->isValid($point['lat'], $point['lng'] ?? null) ? (float) $point['lat'] : null;
         $lng = $lat !== null ? (float) $point['lng'] : null;
         $groups = [];
@@ -82,13 +86,20 @@ class CheckoutService
             $canDeliver = $districtFee !== null;
             $canPickup = (bool) $seller->offers_pickup;
 
+            // WiBuy stations: the shop drops it at its nearest station; the buyer collects or it comes to the door.
+            $dropStation = $stations->dropStationFor($seller);
+
             $method = isset($methods[$sellerId]) ? DeliveryMethod::tryFrom($methods[$sellerId]) : null;
             $method ??= $canDeliver ? DeliveryMethod::Delivery : ($canPickup ? DeliveryMethod::Pickup : null);
 
-            $fee = $method === DeliveryMethod::Delivery && $canDeliver ? Money::from($districtFee) : '0.00';
+            $fee = match (true) {
+                $method === DeliveryMethod::Delivery && $canDeliver => Money::from($districtFee),
+                $method?->viaStation() && $dropStation !== null => $stations->fee($method, $dropStation, $collectStation),
+                default => '0.00',
+            };
 
-            // WiBuy Pass: WiBuy pays the delivery fee of eligible shop orders (the seller still gets it).
-            $passDiscount = $isMember && Money::gt($fee, 0) && Money::gte($subtotal, $freeDeliveryFrom) ? $fee : '0.00';
+            // WiBuy Pass: WiBuy pays the delivery fee of eligible shop orders (the seller still gets it). Not station fees.
+            $passDiscount = $isMember && $method === DeliveryMethod::Delivery && Money::gt($fee, 0) && Money::gte($subtotal, $freeDeliveryFrom) ? $fee : '0.00';
 
             $groups[$sellerId] = [
                 'seller' => $seller,
@@ -97,6 +108,11 @@ class CheckoutService
                 'method' => $method,
                 'can_deliver' => $canDeliver,
                 'can_pickup' => $canPickup,
+                'drop_station' => $dropStation,
+                'collect_station' => $collectStation,
+                // What the station choices cost: collect at the shop's station / have it brought to the door.
+                'station_fee' => $dropStation ? $stations->fee(DeliveryMethod::Station, $dropStation, $collectStation) : null,
+                'station_door_fee' => $dropStation ? $stations->fee(DeliveryMethod::StationDoor, $dropStation, null) : null,
                 'district_fee' => $districtFee === null ? null : Money::from($districtFee),
                 'delivery_reason' => $quote['reason'],
                 'distance_km' => $quote['distance_km'],
@@ -291,7 +307,7 @@ class CheckoutService
             }
 
             $point = isset($details['latitude'], $details['longitude']) ? ['lat' => $details['latitude'], 'lng' => $details['longitude']] : null;
-            $summary = $this->summarize($lines, $details['district'] ?? null, $methods, $buyer, $coupon, $channel, $point);
+            $summary = $this->summarize($lines, $details['district'] ?? null, $methods, $buyer, $coupon, $channel, $point, isset($details['station_id']) ? (int) $details['station_id'] : null);
 
             if ($summary['coupon_error']) {
                 throw new MarketplaceException($summary['coupon_error']);
@@ -331,7 +347,9 @@ class CheckoutService
             foreach ($summary['groups'] as $group) {
                 $seller = $group['seller'];
                 $rate = $seller->commissionRate();
-                $pickup = $group['method'] === DeliveryMethod::Pickup;
+                // No address when the buyer collects (at the shop or at a WiBuy station).
+                $pickup = in_array($group['method'], [DeliveryMethod::Pickup, DeliveryMethod::Station], true);
+                $viaStation = $group['method']->viaStation();
 
                 $order = Order::create([
                     'checkout_id' => $checkout->id,
@@ -346,6 +364,8 @@ class CheckoutService
                     'discount' => $group['discount'],
                     'rfq_quote_id' => $options['rfq_quote_id'] ?? null,
                     'delivery_method' => $group['method'],
+                    'drop_station_id' => $viaStation ? $group['drop_station']?->id : null,
+                    'collect_station_id' => $group['method'] === DeliveryMethod::Station ? $group['collect_station']?->id : null,
                     'recipient_name' => $details['name'],
                     'recipient_phone' => $details['phone'],
                     'district' => $pickup ? null : ($details['district'] ?? null),
@@ -375,6 +395,7 @@ class CheckoutService
                         'quantity' => $item['quantity'],
                         'line_total' => $item['line_total'],
                         'is_sample' => $item['is_sample'],
+                        'genuine_guarantee' => (bool) $product->genuine_guarantee, // what was promised when it was bought
                         'thumb_path' => $product->cover?->thumb_path,
                     ]);
 
@@ -412,6 +433,18 @@ class CheckoutService
 
         if (! $method) {
             throw new MarketplaceException("Choose delivery or pickup for {$shop}.");
+        }
+
+        if ($method->viaStation() && ! $group['drop_station']) {
+            throw new MarketplaceException("{$shop} has no WiBuy station near it yet. Choose delivery or pickup.");
+        }
+
+        if ($method === DeliveryMethod::Station) {
+            if (! $group['collect_station']) {
+                throw new MarketplaceException('Choose the WiBuy station where you will collect your order.');
+            }
+
+            return;
         }
 
         if ($method === DeliveryMethod::Pickup) {

@@ -55,6 +55,79 @@
             @endforeach
         </ol>
 
+        @if ($rider = $order->riderDelivery())
+            <div class="card p-4" aria-label="Delivery by a WiBuy rider">
+                <p class="text-sm font-bold">🛵 {{ $rider['label'] }}</p>
+                @if ($rider['rider_name'])
+                    <p class="text-sm">Rider: <strong>{{ $rider['rider_name'] }}</strong>
+                        @if ($rider['rider_phone']) &middot; <a class="font-semibold text-brand-700 underline" href="tel:+{{ $rider['rider_phone'] }}">{{ phone_display($rider['rider_phone']) }}</a> @endif</p>
+                @endif
+                <ol class="mt-2 flex flex-wrap gap-2 text-xs">
+                    @foreach ($rider['steps'] as $step)
+                        <li class="badge {{ $step['at'] ? 'bg-brand-100 text-brand-800' : 'bg-stone-100 text-stone-500' }}">{{ $step['at'] ? '✓' : '·' }} {{ $step['label'] }}</li>
+                    @endforeach
+                </ol>
+                @if ($rider['stage'] === \App\Models\DeliveryJob::PICKED_UP)
+                    {{-- Live: where the rider is, how far and how long. Refreshes every 20 seconds. --}}
+                    <div class="mt-3" data-tracking data-url="{{ route('orders.tracking', $order) }}">
+                        <p class="font-bold" data-tracking-text>
+                            @if ($rider['tracking'] && $rider['tracking']['km'] !== null)
+                                About {{ $rider['tracking']['km'] }} km away &middot; about {{ $rider['tracking']['minutes'] }} min
+                            @elseif ($rider['tracking'])
+                                The rider is on the way.
+                            @else
+                                Waiting for the rider's location…
+                            @endif
+                        </p>
+                        <div class="mt-2 h-56 overflow-hidden rounded-lg bg-stone-100" data-tracking-map></div>
+                        <p class="mt-1 text-xs text-stone-500" data-tracking-updated>Distance and time are estimates.</p>
+                    </div>
+                    <p class="mt-2 text-xs text-stone-600">Give the rider the 4-digit code from our SMS only when you have your goods.</p>
+                @endif
+            </div>
+            @if ($rider['stage'] === \App\Models\DeliveryJob::PICKED_UP)
+                @push('head')
+                    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+                    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+                @endpush
+                <script>
+                    (() => {
+                        const box = document.querySelector('[data-tracking]');
+                        const text = box.querySelector('[data-tracking-text]');
+                        const updated = box.querySelector('[data-tracking-updated]');
+                        let map, riderMark, homeMark;
+
+                        const show = (t) => {
+                            if (!t) { text.textContent = "Waiting for the rider's location…"; return; }
+                            text.textContent = t.km !== null ? `About ${t.km} km away · about ${t.minutes} min${t.to_station ? ' to ' + t.to_station : ''}` : 'The rider is on the way.';
+                            updated.textContent = (t.live ? 'Live · updated ' : 'Last seen ') + new Date(t.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '. Distance and time are estimates.';
+                            if (!window.L) return;
+                            const r = [t.rider.lat, t.rider.lng];
+                            if (!map) {
+                                map = L.map(box.querySelector('[data-tracking-map]'), { zoomControl: false }).setView(r, 14);
+                                L.tileLayer(@json(config('services.maps.tiles')), { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+                                riderMark = L.marker(r, { title: 'Rider' }).addTo(map).bindTooltip('🛵 Rider', { permanent: true });
+                                if (t.destination) homeMark = L.circleMarker([t.destination.lat, t.destination.lng], { radius: 8, color: '#15803d' }).addTo(map).bindTooltip(t.to_station ? '📦 Station' : '🏠 You');
+                            }
+                            riderMark.setLatLng(r);
+                            if (homeMark) map.fitBounds(L.latLngBounds([r, homeMark.getLatLng()]).pad(0.3)); else map.setView(r);
+                        };
+
+                        const poll = () => fetch(box.dataset.url, { headers: { Accept: 'application/json' } })
+                            .then((res) => res.ok ? res.json() : null)
+                            .then((json) => {
+                                if (!json) return;
+                                if (!json.rider_delivery || json.rider_delivery.stage !== 'picked_up') { location.reload(); return; } // delivered
+                                show(json.rider_delivery.tracking);
+                            });
+
+                        show(@json($rider['tracking']));
+                        setInterval(poll, 20000);
+                    })();
+                </script>
+            @endif
+        @endif
+
         @if ($order->delivery_note)
             <div class="card p-4"><p class="text-sm font-bold">Note from the seller</p><p>{{ $order->delivery_note }}</p></div>
         @endif
@@ -97,7 +170,7 @@
             @endif
 
             @if ($canReview)
-                <form method="POST" action="{{ route('orders.review', $order) }}" class="card space-y-4 p-4">
+                <form method="POST" action="{{ route('orders.review', $order) }}" enctype="multipart/form-data" class="card space-y-4 p-4">
                     @csrf
                     <h2 class="text-lg font-extrabold">Leave a review</h2>
                     @error('seller_rating') <p class="field-error">{{ $message }}</p> @enderror
@@ -124,6 +197,9 @@
                                 @endfor
                             </div>
                             <textarea name="items[{{ $item->id }}][comment]" rows="2" maxlength="1000" class="input mt-2" placeholder="What did you think? (optional)"></textarea>
+                            <label for="photos-{{ $item->id }}" class="mt-2 block text-sm font-semibold text-stone-600">📷 Photos of what you got (optional, up to 4)</label>
+                            <input id="photos-{{ $item->id }}" type="file" name="items[{{ $item->id }}][photos][]" accept="image/*" multiple class="mt-1 block w-full text-sm">
+                            @error("items.{$item->id}.photos*") <p class="field-error">{{ $message }}</p> @enderror
                         </fieldset>
                     @endforeach
 
@@ -159,6 +235,10 @@
             @if ($order->isPickup())
                 <p class="font-bold">Pickup from the seller</p>
                 <p>{{ $order->seller->pickup_address }}, {{ $order->seller->location }}</p>
+            @elseif ($order->delivery_method === \App\Enums\DeliveryMethod::Station && $order->collectStation)
+                <p class="font-bold">📦 Collect at WiBuy station</p>
+                <p>{{ $order->collectStation->label() }}</p>
+                <p class="text-stone-600">{{ $order->at_collect_station_at ? 'It is there now. Show the code from our SMS to collect it.' : 'We text you a code when it arrives at the station.' }}</p>
             @else
                 <p class="font-bold">Delivery to</p>
                 <p>{{ $order->recipient_name }}, {{ phone_display($order->recipient_phone) }}</p>

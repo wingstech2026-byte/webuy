@@ -37,26 +37,29 @@
             <nav class="flex items-center text-sm font-semibold" aria-label="Main">
                 @auth
                     <a href="{{ route('cart.index') }}" class="relative whitespace-nowrap rounded-lg px-2 py-2 hover:bg-brand-800">
-                        Cart
+                        {{ __('Cart') }}
                         @if (($cartCount ?? 0) > 0)
                             <span class="ml-0.5 inline-flex min-w-5 justify-center rounded-full bg-amber-400 px-1.5 text-xs font-extrabold text-stone-900">{{ $cartCount > 99 ? '99+' : $cartCount }}</span>
                         @endif
                     </a>
-                    <a href="{{ route('orders.index') }}" class="whitespace-nowrap rounded-lg px-2 py-2 hover:bg-brand-800">Orders</a>
-                    <a href="{{ route('chat.index') }}" class="hidden whitespace-nowrap rounded-lg px-2 py-2 hover:bg-brand-800 sm:inline-block">Chat <span data-unread-badge data-url="{{ route('chat.unread') }}" class="{{ ($chatUnread ?? 0) > 0 ? '' : 'hidden' }} ml-0.5 inline-flex min-w-5 justify-center rounded-full bg-red-500 px-1.5 text-xs font-extrabold text-white">{{ ($chatUnread ?? 0) > 99 ? '99+' : ($chatUnread ?? 0) }}</span></a>
+                    <a href="{{ route('orders.index') }}" class="whitespace-nowrap rounded-lg px-2 py-2 hover:bg-brand-800">{{ __('Orders') }}</a>
+                    <a href="{{ route('chat.index') }}" class="hidden whitespace-nowrap rounded-lg px-2 py-2 hover:bg-brand-800 sm:inline-block">{{ __('Chat') }} <span data-unread-badge data-url="{{ route('chat.unread') }}" class="{{ ($chatUnread ?? 0) > 0 ? '' : 'hidden' }} ml-0.5 inline-flex min-w-5 justify-center rounded-full bg-red-500 px-1.5 text-xs font-extrabold text-white">{{ ($chatUnread ?? 0) > 99 ? '99+' : ($chatUnread ?? 0) }}</span></a>
                     <details class="relative">
-                        <summary class="cursor-pointer list-none whitespace-nowrap rounded-lg px-2 py-2 hover:bg-brand-800" aria-label="Menu">Menu ▾</summary>
+                        <summary class="cursor-pointer list-none whitespace-nowrap rounded-lg px-2 py-2 hover:bg-brand-800" aria-label="{{ __('Menu') }}">{{ __('Menu') }} ▾</summary>
                         <div class="absolute right-0 mt-1 w-56 overflow-hidden rounded-xl bg-white py-1 text-stone-800 shadow-lg ring-1 ring-stone-200">
                             <p class="border-b border-stone-100 px-4 py-2 text-xs text-stone-500">{{ auth()->user()->name ?: auth()->user()->display_phone }}</p>
-                            <a href="{{ route('wishlist.index') }}" class="block px-4 py-3 hover:bg-brand-50">Wishlist</a>
-                            <a href="{{ route('compare.index') }}" class="block px-4 py-3 hover:bg-brand-50">Compare &amp; recently viewed</a>
+                            <a href="{{ route('wishlist.index') }}" class="block px-4 py-3 hover:bg-brand-50">{{ __('Wishlist') }}</a>
+                            <a href="{{ route('compare.index') }}" class="block px-4 py-3 hover:bg-brand-50">{{ __('Compare & recently viewed') }}</a>
                             <a href="{{ route('group-buys.index') }}" class="block px-4 py-3 hover:bg-brand-50">👥 Buy together</a>
+                            @if (\App\Models\Station::where('user_id', auth()->id())->exists())
+                                <a href="{{ route('station.index') }}" class="block px-4 py-3 font-semibold hover:bg-brand-50">📦 My WiBuy station</a>
+                            @endif
                             @if (auth()->user()->is_rider)
                                 <a href="{{ route('rider.index') }}" class="block px-4 py-3 font-semibold hover:bg-brand-50">🛵 Rider jobs</a>
                             @endif
                             <a href="{{ route('chat.index') }}" class="block px-4 py-3 hover:bg-brand-50 sm:hidden">Chat @if (($chatUnread ?? 0) > 0) <span class="badge bg-red-600 text-white">{{ $chatUnread }}</span> @endif</a>
                             @if (auth()->user()->isSeller())
-                                <a href="{{ route('seller.dashboard') }}" class="block px-4 py-3 font-bold text-brand-800 hover:bg-brand-50">Seller dashboard</a>
+                                <a href="{{ route('seller.dashboard') }}" class="block px-4 py-3 font-bold text-brand-800 hover:bg-brand-50">{{ __('Seller dashboard') }}</a>
                             @else
                                 <a href="{{ route('sell.apply') }}" class="block px-4 py-3 hover:bg-brand-50">Sell on {{ config('wibuy.name') }}</a>
                             @endif
@@ -65,23 +68,23 @@
                             @endif
                             <form method="POST" action="{{ route('logout') }}">
                                 @csrf
-                                <button class="block w-full px-4 py-3 text-left hover:bg-brand-50">Log out</button>
+                                <button class="block w-full px-4 py-3 text-left hover:bg-brand-50">{{ __('Log out') }}</button>
                             </form>
                         </div>
                     </details>
                 @else
-                    <a href="{{ route('login') }}" class="whitespace-nowrap rounded-lg bg-white px-3 py-2 text-brand-800 hover:bg-brand-50">Log in</a>
+                    <a href="{{ route('login') }}" class="whitespace-nowrap rounded-lg bg-white px-3 py-2 text-brand-800 hover:bg-brand-50">{{ __('Log in') }}</a>
                 @endauth
             </nav>
         </div>
         <form action="{{ route('search') }}" method="GET" role="search" class="mx-auto flex max-w-6xl gap-2 px-4 pb-3 pt-2">
-            <label for="site-search" class="sr-only">Search products</label>
+            <label for="site-search" class="sr-only">{{ __('Search products') }}</label>
             <input id="site-search" type="search" name="q" value="{{ request()->routeIs('search', 'categories.show') ? request('q') : '' }}"
-                   placeholder="Search rice, phones, solar panels…" class="min-h-11 w-full rounded-xl border-0 bg-white px-4 text-base text-stone-900 placeholder:text-stone-500 focus:outline-none focus:ring-4 focus:ring-brand-300">
+                   placeholder="{{ __('Search rice, phones, solar panels…') }}" class="min-h-11 w-full rounded-xl border-0 bg-white px-4 text-base text-stone-900 placeholder:text-stone-500 focus:outline-none focus:ring-4 focus:ring-brand-300">
             @if (\App\Services\Assistant\PhotoSearch::enabled())
-                <a href="{{ route('search.photo') }}" class="flex min-h-11 items-center rounded-xl bg-white px-3 text-xl hover:bg-brand-50" title="Search with a photo" aria-label="Search with a photo">📷</a>
+                <a href="{{ route('search.photo') }}" class="flex min-h-11 items-center rounded-xl bg-white px-3 text-xl hover:bg-brand-50" title="{{ __('Search with a photo') }}" aria-label="{{ __('Search with a photo') }}">📷</a>
             @endif
-            <button class="min-h-11 rounded-xl bg-amber-400 px-4 font-bold text-stone-900 hover:bg-amber-300">Search</button>
+            <button class="min-h-11 rounded-xl bg-amber-400 px-4 font-bold text-stone-900 hover:bg-amber-300">{{ __('Search') }}</button>
         </form>
     </header>
 
@@ -92,14 +95,26 @@
 
     <footer class="border-t border-stone-200 bg-white">
         <div class="mx-auto max-w-6xl space-y-2 px-4 py-6 text-center text-sm text-stone-600">
-            <p class="font-bold text-brand-800">{{ config('wibuy.name') }} – {{ config('wibuy.tagline') }}</p>
-            <p>Pay safely with Orange Money or Afrimoney. The seller is only paid after you confirm you got your order.</p>
+            <p class="font-bold text-brand-800">{{ config('wibuy.name') }} – {{ __(config('wibuy.tagline')) }}</p>
+            <p>{{ __('Pay safely with Orange Money or Afrimoney. The seller is only paid after you confirm you got your order.') }}</p>
             <p>
-                <a class="font-semibold text-brand-700 underline" href="{{ route('sell.apply') }}">Sell on {{ config('wibuy.name') }}</a>
+                <a class="font-semibold text-brand-700 underline" href="{{ route('sell.apply') }}">{{ __('Sell on WiBuy') }}</a>
                 @if (config('wibuy.support_whatsapp'))
-                    &middot; <a class="font-semibold text-brand-700 underline" href="https://wa.me/{{ config('wibuy.support_whatsapp') }}">Help on WhatsApp</a>
+                    &middot; <a class="font-semibold text-brand-700 underline" href="https://wa.me/{{ config('wibuy.support_whatsapp') }}">{{ __('Help on WhatsApp') }}</a>
                 @endif
             </p>
+            <form method="POST" action="{{ route('data-saver') }}">
+                @csrf
+                <button class="text-xs font-semibold text-brand-700 underline">{{ data_saver() ? __('📶 Save data is on (smaller pictures) · turn off') : __('📶 Save data: use smaller pictures') }}</button>
+            </form>
+            {{-- English or Krio --}}
+            <form method="POST" action="{{ route('language') }}" class="flex items-center justify-center gap-2 text-xs">
+                @csrf
+                <span>🌍 {{ __('Language') }}:</span>
+                @foreach (\App\Http\Middleware\SetLanguage::LANGUAGES as $code => $name)
+                    <button name="language" value="{{ $code }}" class="rounded-full px-2 py-1 font-semibold {{ app()->getLocale() === $code ? 'bg-brand-700 text-white' : 'text-brand-700 underline' }}" @if (app()->getLocale() === $code) aria-current="true" @endif>{{ $name }}</button>
+                @endforeach
+            </form>
             <p class="text-xs text-stone-400">&copy; {{ date('Y') }} {{ config('wibuy.name') }}</p>
         </div>
     </footer>

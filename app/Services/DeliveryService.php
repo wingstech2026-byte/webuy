@@ -94,7 +94,9 @@ class DeliveryService
             }
 
             $job->forceFill(['status' => DeliveryJob::ASSIGNED, 'rider_id' => $rider->id, 'assigned_at' => now()])->save();
-            $this->sms->send($job->order->seller->user->phone, "WiBuy: Rider {$rider->name} ({$rider->display_phone}) will collect order {$job->order->number}.");
+            // Whoever hands the parcel over is told who is coming: the shop, or the partner station.
+            $handsOver = $job->pickupStation?->partner?->phone ?? $job->order->seller->user->phone;
+            $this->sms->send($handsOver, "WiBuy: Rider {$rider->name} ({$rider->display_phone}) will collect order {$job->order->number}.");
         });
     }
 
@@ -102,7 +104,8 @@ class DeliveryService
     public function release(DeliveryJob $job, User $rider): DeliveryJob
     {
         return $this->step($job, $rider, [DeliveryJob::ASSIGNED], function (DeliveryJob $job) {
-            $job->forceFill(['status' => DeliveryJob::OPEN, 'rider_id' => null, 'assigned_at' => null])->save();
+            $job->forceFill(['status' => DeliveryJob::OPEN, 'rider_id' => null, 'assigned_at' => null, 'notified_km' => null])->save();
+            app(RiderTrackingService::class)->forget($job);
         });
     }
 
@@ -110,10 +113,21 @@ class DeliveryService
     public function pickedUp(DeliveryJob $job, User $rider): DeliveryJob
     {
         return $this->step($job, $rider, [DeliveryJob::ASSIGNED], function (DeliveryJob $job) use ($rider) {
+            // Station to station: the receiving station confirms it, there is no buyer code.
+            if ($job->isTransfer()) {
+                $job->forceFill(['status' => DeliveryJob::PICKED_UP, 'picked_up_at' => now()])->save();
+
+                return;
+            }
+
             $code = (string) random_int(1000, 9999);
             $job->forceFill(['status' => DeliveryJob::PICKED_UP, 'picked_up_at' => now(), 'code_hash' => Hash::make($code), 'code_attempts' => 0])->save();
 
-            $this->orders->ship($job->order, "WiBuy rider {$rider->name}, {$rider->display_phone}");
+            // From a station the order is already "shipped" (the station received it).
+            if ($job->kind === DeliveryJob::KIND_DOOR) {
+                $this->orders->ship($job->order, "WiBuy rider {$rider->name}, {$rider->display_phone}");
+            }
+
             $this->sms->send($job->order->buyer->phone, "WiBuy: Your order {$job->order->number} is on its way with rider {$rider->name}. Give the rider this code only when you have your goods: {$code}");
         });
     }
@@ -125,6 +139,8 @@ class DeliveryService
 
         try {
             return $this->step($job, $rider, [DeliveryJob::PICKED_UP], function (DeliveryJob $job) use ($code, &$wrong) {
+                $this->refuseTransfer($job);
+
                 if ($job->code_attempts >= self::MAX_CODE_ATTEMPTS) {
                     throw new MarketplaceException('Too many wrong codes. Take a photo of the handover instead.');
                 }
@@ -155,6 +171,7 @@ class DeliveryService
     public function deliverWithPhoto(DeliveryJob $job, User $rider, UploadedFile $photo, ?string $note): DeliveryJob
     {
         return $this->step($job, $rider, [DeliveryJob::PICKED_UP], function (DeliveryJob $job) use ($rider, $photo, $note) {
+            $this->refuseTransfer($job);
             $this->images->attach($job, $photo, 'delivery', $rider->id);
             $this->finish($job, 'photo', $note);
         });
@@ -173,12 +190,22 @@ class DeliveryService
             }
 
             $job->forceFill(['status' => DeliveryJob::CANCELLED])->save();
+            app(RiderTrackingService::class)->forget($job);
         });
+    }
+
+    /** @throws MarketplaceException */
+    private function refuseTransfer(DeliveryJob $job): void
+    {
+        if ($job->isTransfer()) {
+            throw new MarketplaceException("Hand it to the staff at WiBuy station {$job->dropoffStation->name}. They confirm they received it.");
+        }
     }
 
     private function finish(DeliveryJob $job, string $proof, ?string $note): void
     {
         $job->forceFill(['status' => DeliveryJob::DELIVERED, 'delivered_at' => now(), 'proof' => $proof, 'proof_note' => $note])->save();
+        app(RiderTrackingService::class)->forget($job);
         $this->orders->markDelivered($job->order);
     }
 
@@ -191,7 +218,7 @@ class DeliveryService
     private function step(DeliveryJob $job, ?User $rider, array $from, callable $change): DeliveryJob
     {
         return DB::transaction(function () use ($job, $rider, $from, $change) {
-            $locked = DeliveryJob::lockForUpdate()->with('order.buyer', 'order.seller.user', 'rider', 'seller')->findOrFail($job->id);
+            $locked = DeliveryJob::lockForUpdate()->with('order.buyer', 'order.seller.user', 'rider', 'seller', 'pickupStation.partner', 'dropoffStation')->findOrFail($job->id);
 
             if ($rider && $locked->rider_id !== $rider->id) {
                 throw new MarketplaceException('This delivery is not yours.');

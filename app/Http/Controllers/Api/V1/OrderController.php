@@ -31,7 +31,7 @@ class OrderController extends Controller
     {
         abort_if(Gate::denies('buy', $order), 404); // 404, not 403: never confirm someone else's order exists
 
-        return new OrderResource($order->load('items.review', 'items.product', 'seller.logo', 'sellerReview'));
+        return new OrderResource($order->load('items.review', 'items.product', 'seller.logo', 'sellerReview', 'deliveryJob.rider', 'collectStation'));
     }
 
     /** "I got my order": it completes and the seller is paid. */

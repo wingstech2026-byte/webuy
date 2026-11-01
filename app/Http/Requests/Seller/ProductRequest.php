@@ -5,6 +5,7 @@ namespace App\Http\Requests\Seller;
 use App\Enums\ProductCondition;
 use App\Enums\ProductStatus;
 use App\Http\Requests\Concerns\ValidatesImages;
+use App\Services\ProductVideoService;
 use App\Support\Money;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -47,6 +48,12 @@ class ProductRequest extends FormRequest
             'unit' => ['required', 'string', 'max:40'],
             'min_order_quantity' => ['required', 'integer', 'min:1', 'max:100000'],
             'condition' => ['required', Rule::enum(ProductCondition::class)],
+            // Only when sent: an older app that does not know about it leaves it as it is.
+            'genuine_guarantee' => ['sometimes', 'boolean'],
+            // A short video made with the phone camera (length checked by ProductVideoService).
+            // By file ending; ProductVideoService then reads the file and refuses anything that is not a real MP4/MOV.
+            'video' => ['nullable', 'file', 'extensions:mp4,mov,m4v', 'max:'.ProductVideoService::MAX_KB],
+            'remove_video' => ['nullable', 'boolean'],
             // Sellers choose draft or live. Suspending is an admin decision.
             'status' => ['required', Rule::in([ProductStatus::Draft->value, ProductStatus::Active->value])],
 
@@ -125,7 +132,7 @@ class ProductRequest extends FormRequest
     {
         return collect($this->validated())->only([
             'title', 'category_id', 'description', 'price', 'compare_at_price', 'member_price', 'lead_time_days', 'sample_price', 'stock', 'unit',
-            'min_order_quantity', 'condition', 'status',
+            'min_order_quantity', 'condition', 'status', 'genuine_guarantee',
         ])->all();
     }
 
@@ -141,6 +148,8 @@ class ProductRequest extends FormRequest
             'tiers.*.min_quantity.min' => 'A wholesale tier starts at 2 units or more.',
             'variants.*.name.distinct' => 'Each option needs a different name.',
             'variants.*.stock.required' => 'Enter how many you have of each option.',
+            'video.extensions' => 'Please choose a video recorded with your phone (MP4 or MOV).',
+            'video.max' => 'That video is too big. Keep it under 30 MB (about a minute).',
         ] + $this->imageMessages('images.*', 'picture');
     }
 }

@@ -100,6 +100,12 @@
                             @endforeach
                         </select>
                     </div>
+                    <div class="sm:col-span-2">
+                        <input type="hidden" name="genuine_guarantee" value="0">
+                        <label class="choice"><input type="checkbox" name="genuine_guarantee" value="1" class="size-5 accent-brand-700" @checked(old('genuine_guarantee', $item->genuine_guarantee))>
+                            ✅ I guarantee this product is genuine</label>
+                        <p class="mt-1 text-xs text-stone-500">Buyers see a "Genuine guarantee" badge. If it turns out fake, the buyer is refunded and gets extra compensation from your balance.</p>
+                    </div>
                 </div>
             </div>
 
@@ -195,6 +201,17 @@
                 @error('images.*') <p class="field-error">{{ $message }}</p> @enderror
             </div>
 
+            <div class="card space-y-2 p-4">
+                <h2 class="font-bold">🎥 Video (optional)</h2>
+                <p class="text-xs text-stone-500">Show your goods in a short video made with your phone: up to {{ \App\Services\ProductVideoService::MAX_SECONDS }} seconds, MP4 or MOV.</p>
+                @if ($item->video_url)
+                    <video src="{{ $item->video_url }}" controls preload="none" playsinline class="w-full rounded-lg bg-black"></video>
+                    <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="remove_video" value="1" class="accent-red-600"> Remove the video</label>
+                @endif
+                <input name="video" type="file" accept="video/mp4,video/quicktime,video/*" class="input" aria-label="{{ $item->video_url ? 'Replace the video' : 'Add a video' }}">
+                @error('video') <p class="field-error">{{ $message }}</p> @enderror
+            </div>
+
             <div class="card space-y-3 p-5">
                 <h2 class="font-bold">Show to buyers?</h2>
                 <label class="choice"><input type="radio" name="status" value="active" class="size-5 accent-brand-700" @checked(old('status', $item->status?->value ?? 'draft') === 'active')> Yes, put it live</label>
@@ -204,11 +221,16 @@
             </div>
 
             @if ($item->exists)
-                <form method="POST" action="{{ route('seller.products.destroy', $item) }}" onsubmit="return confirm('Delete this product?')">
-                    @csrf @method('DELETE')
-                    <button class="btn btn-danger btn-sm w-full">Delete product</button>
-                </form>
+                {{-- Belongs to the delete form below (form="..."): a form inside a form is ignored by browsers,
+                     which made "Save product" send the delete. --}}
+                <button form="delete-product" class="btn btn-danger btn-sm w-full">Delete product</button>
             @endif
         </div>
     </form>
+
+    @if ($item->exists)
+        <form id="delete-product" method="POST" action="{{ route('seller.products.destroy', $item) }}" onsubmit="return confirm('Delete this product?')">
+            @csrf @method('DELETE')
+        </form>
+    @endif
 @endsection

@@ -18,13 +18,16 @@ use App\Models\Product;
 use App\Models\Rfq;
 use App\Models\RfqQuote;
 use App\Models\SellerLocation;
+use App\Services\BuyerProtectionService;
 use App\Services\GroupBuyService;
 use App\Services\LedgerService;
 use App\Services\OrderService;
 use App\Services\PayoutService;
 use App\Services\ProductImportService;
 use App\Services\ProductService;
+use App\Services\ProductVideoService;
 use App\Services\RfqService;
+use App\Services\SellerReportService;
 use App\Services\SettingsService;
 use App\Services\VariantService;
 use App\Support\GroupBuyOfferRules;
@@ -85,8 +88,13 @@ class SellerController extends Controller
             'earnings' => $order->seller_earnings,
             'accept_by' => $order->accept_by?->toIso8601String(),
             'can_accept' => $order->status === OrderStatus::Paid,
-            'can_ship' => $order->status === OrderStatus::Accepted && ! $order->hasUnpaidMilestones(),
-            'can_deliver' => $order->status === OrderStatus::Shipped && ! $order->isPickup(),
+            'can_ship' => $order->status === OrderStatus::Accepted && ! $order->hasUnpaidMilestones() && ! $order->viaStation(),
+            'can_deliver' => $order->status === OrderStatus::Shipped && ! $order->isPickup() && ! $order->viaStation(),
+            // Station orders: the seller takes the parcel to this station (the station marks it received).
+            'drop_station' => $order->viaStation() && $order->dropStation ? [
+                'name' => $order->dropStation->name, 'address' => $order->dropStation->address, 'district' => $order->dropStation->district,
+                'opening_hours' => $order->dropStation->opening_hours, 'latitude' => (float) $order->dropStation->latitude, 'longitude' => (float) $order->dropStation->longitude,
+            ] : null,
         ]);
     }
 
@@ -95,6 +103,10 @@ class SellerController extends Controller
         $this->seller($request);
         abort_if(Gate::denies('manage', $order), 404);
         $data = $request->validate(['reason' => [$action === 'reject' ? 'required' : 'nullable', 'string', 'max:200']]);
+
+        if ($order->viaStation() && in_array($action, ['ship', 'deliver'], true)) {
+            throw new MarketplaceException('Take this order to the WiBuy station. The station marks it when they receive it.');
+        }
 
         match ($action) {
             'accept' => $orders->accept($order),
@@ -132,6 +144,17 @@ class SellerController extends Controller
 
         if ($request->boolean('variants_sent')) {
             $variants->sync($saved, $request->variants());
+        }
+
+        if ($request->hasFile('video')) {
+            app(ProductVideoService::class)->attach($saved, $request->file('video'));
+        } elseif ($request->boolean('remove_video')) {
+            app(ProductVideoService::class)->remove($saved);
+        }
+
+        if ($product) {
+            // A lower price: recent buyers get the difference as a coupon (price protection).
+            app(BuyerProtectionService::class)->onPriceChange($saved->refresh());
         }
 
         return response()->json(['data' => $this->productJson($request, $saved->refresh()->load('images', 'tiers', 'seller', 'variants'))], $product ? 200 : 201);
@@ -192,6 +215,12 @@ class SellerController extends Controller
             'all_tiers' => $product->tiers->map(fn ($t) => ['min_quantity' => $t->min_quantity, 'unit_price' => (string) $t->unit_price, 'business_only' => $t->business_only])->values(),
             'photos' => $product->images->sortBy('position')->map(fn ($i) => ['id' => $i->id, 'status' => $i->status, 'thumb_url' => $i->thumb_url])->values(),
         ];
+    }
+
+    /** Sales report: ?days=7|30|90. Same numbers as the website. */
+    public function reports(Request $request, SellerReportService $reports): JsonResponse
+    {
+        return response()->json($reports->report($this->seller($request), $request->integer('days', 30)));
     }
 
     public function earnings(Request $request, LedgerService $ledger): JsonResponse

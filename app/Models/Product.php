@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Facades\Storage;
 
 class Product extends Model
 {
@@ -23,6 +24,7 @@ class Product extends Model
         'seller_id', 'category_id', 'title', 'slug', 'description', 'price', 'compare_at_price',
         'stock', 'unit', 'min_order_quantity', 'condition', 'status', 'is_deal', 'is_featured',
         'rating_avg', 'rating_count', 'sold_count', 'member_price', 'lead_time_days', 'sample_price',
+        'genuine_guarantee',
     ];
 
     protected function casts(): array
@@ -30,6 +32,7 @@ class Product extends Model
         return [
             'price' => 'decimal:2',
             'compare_at_price' => 'decimal:2',
+            'genuine_guarantee' => 'boolean',
             'rating_avg' => 'decimal:2',
             'condition' => ProductCondition::class,
             'status' => ProductStatus::class,
@@ -43,6 +46,12 @@ class Product extends Model
     public function getRouteKeyName(): string
     {
         return 'slug';
+    }
+
+    /** The seller's short video of the product, if any. */
+    public function getVideoUrlAttribute(): ?string
+    {
+        return $this->video_path ? Storage::disk(Image::DISK)->url($this->video_path) : null;
     }
 
     public function seller(): BelongsTo
@@ -121,9 +130,14 @@ class Product extends Model
             : $this->variants()->active()->exists();
     }
 
+    /** Reviews with photos first (they help other buyers most), then the newest. */
     public function reviews(): HasMany
     {
-        return $this->hasMany(Review::class)->latest('id');
+        return $this->hasMany(Review::class)
+            // A count (never null) sorts the same way on SQLite, MySQL and PostgreSQL.
+            ->orderByDesc(Image::selectRaw('count(*)')->whereColumn('imageable_id', 'reviews.id')
+                ->where('imageable_type', (new Review)->getMorphClass())->where('collection', 'review'))
+            ->latest('id');
     }
 
     /** Products buyers can see and buy: live, from an approved shop. */

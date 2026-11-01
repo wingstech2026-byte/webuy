@@ -34,6 +34,16 @@
                 <p class="text-sm text-stone-600">The order is marked shipped when the rider collects it.</p>
                 <form method="POST" action="{{ route('seller.deliveries.cancel', $order->deliveryJob) }}">@csrf<button class="btn btn-outline btn-sm">Cancel the rider (I will deliver myself)</button></form>
             </div>
+        @elseif ($order->status === OrderStatus::Accepted && $order->viaStation())
+            {{-- The buyer chose a WiBuy station: the seller only drops the parcel there. --}}
+            <div class="card space-y-2 p-4">
+                <p class="font-bold">📦 Take this order to the WiBuy station</p>
+                @if ($order->dropStation)
+                    <p><strong>{{ $order->dropStation->name }}</strong>, {{ $order->dropStation->address }} ({{ $order->dropStation->district }}){{ $order->dropStation->opening_hours ? ' · '.$order->dropStation->opening_hours : '' }}
+                        &middot; <a class="text-brand-700 underline" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query={{ $order->dropStation->latitude }},{{ $order->dropStation->longitude }}">map</a></p>
+                @endif
+                <p class="text-sm text-stone-600">Write <strong class="font-mono">{{ $order->number }}</strong> on the parcel. The station marks it received; from there WiBuy takes it to the buyer.</p>
+            </div>
         @elseif ($order->status === OrderStatus::Accepted)
             @unless ($order->isPickup())
                 <form method="POST" action="{{ route('seller.orders.rider', $order) }}" class="card space-y-2 p-4">

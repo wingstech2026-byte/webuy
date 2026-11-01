@@ -92,8 +92,13 @@ class SellerService
         });
     }
 
+    /** @throws MarketplaceException when the owner has not sent their national ID card yet */
     public function approve(Seller $seller, bool $verified = false): Seller
     {
+        if (! $seller->hasOwnerIdentity()) {
+            throw new MarketplaceException('This shop cannot be approved yet: the owner has not sent their national ID card (number and photo).');
+        }
+
         $seller->forceFill([
             'status' => SellerStatus::Approved,
             'approved_at' => $seller->approved_at ?? now(),

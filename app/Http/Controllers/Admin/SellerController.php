@@ -3,13 +3,17 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Enums\SellerStatus;
+use App\Exceptions\MarketplaceException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ReasonRequest;
 use App\Models\Seller;
 use App\Services\LedgerService;
+use App\Services\OwnerIdentityService;
 use App\Services\SellerService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /** Seller applications and shops: approve, reject, verify, suspend. */
 class SellerController extends Controller
@@ -31,10 +35,11 @@ class SellerController extends Controller
         ]);
     }
 
-    public function show(Seller $seller, LedgerService $ledger)
+    public function show(Seller $seller, LedgerService $ledger, OwnerIdentityService $identity)
     {
         return view('admin.sellers.show', [
             'seller' => $seller->load('user', 'logo', 'deliveryAreas'),
+            'sameIdElsewhere' => $identity->sameIdElsewhere($seller),
             'money' => $ledger->summary($seller),
             'productCount' => $seller->products()->count(),
             'orderCount' => $seller->orders()->count(),
@@ -43,9 +48,25 @@ class SellerController extends Controller
 
     public function approve(Request $request, Seller $seller): RedirectResponse
     {
-        $this->sellers->approve($seller, $request->boolean('verified'));
+        try {
+            $this->sellers->approve($seller, $request->boolean('verified'));
+        } catch (MarketplaceException $e) {
+            return back()->withErrors(['general' => $e->getMessage()]);
+        }
 
         return back()->with('status', "{$seller->shop_name} is approved.");
+    }
+
+    /** A photo of the owner's ID card, streamed from the private disk; never cached by the browser. */
+    public function identityPhoto(Seller $seller, string $side): StreamedResponse
+    {
+        $path = $side === 'back' ? $seller->owner_id_back_path : $seller->owner_id_front_path;
+        abort_unless($path && Storage::disk()->exists($path), 404);
+
+        return Storage::disk()->response($path, "id-{$side}.jpg", [
+            'Cache-Control' => 'private, no-store, max-age=0',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
     }
 
     public function reject(ReasonRequest $request, Seller $seller): RedirectResponse

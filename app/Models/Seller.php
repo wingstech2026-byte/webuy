@@ -36,7 +36,24 @@ class Seller extends Model
             'commission_percent' => 'decimal:2',
             'rating_avg' => 'decimal:2',
             'approved_at' => 'datetime',
+            'owner_id_number' => 'encrypted',
+            'owner_id_submitted_at' => 'datetime',
         ];
+    }
+
+    /** The owner's ID card never leaves the server in JSON (API, logs); admins see it on the approval page only. */
+    protected $hidden = ['owner_id_number', 'owner_id_number_hash', 'owner_id_front_path', 'owner_id_back_path'];
+
+    /** The owner sent their national ID number and a photo of the card (needed before approval). */
+    public function hasOwnerIdentity(): bool
+    {
+        return filled($this->owner_id_number) && filled($this->owner_id_front_path);
+    }
+
+    /** A one-way fingerprint of an ID number, to spot the same card on two shops without storing it in clear. */
+    public static function idFingerprint(string $number): string
+    {
+        return hash_hmac('sha256', $number, (string) config('app.key'));
     }
 
     public function getRouteKeyName(): string

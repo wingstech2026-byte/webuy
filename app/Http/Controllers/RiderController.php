@@ -8,12 +8,15 @@ use App\Http\Requests\RiderPayoutRequest;
 use App\Models\DeliveryJob;
 use App\Models\LedgerEntry;
 use App\Models\Payout;
+use App\Models\Station;
 use App\Models\User;
 use App\Services\DeliveryService;
 use App\Services\LedgerService;
 use App\Services\PayoutService;
+use App\Services\RiderTrackingService;
 use App\Services\SettingsService;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -66,6 +69,20 @@ class RiderController extends Controller
             : redirect()->route('rider.jobs.show', $deliveryJob)->with('status', 'Done.');
     }
 
+    /** The rider's phone reports where it is while carrying a parcel (only the latest point is kept). */
+    public function location(Request $request, DeliveryJob $deliveryJob, RiderTrackingService $tracking): JsonResponse
+    {
+        $data = $request->validate(['lat' => ['required', 'numeric'], 'lng' => ['required', 'numeric']]);
+
+        try {
+            $tracking->report($deliveryJob, $this->rider($request), (float) $data['lat'], (float) $data['lng']);
+        } catch (MarketplaceException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['shared' => true]);
+    }
+
     /** Delivery fees earned, payouts and every credit and debit. Former riders can still withdraw what they earned. */
     public function earnings(Request $request, LedgerService $ledger): View
     {
@@ -94,10 +111,10 @@ class RiderController extends Controller
         return redirect()->route('rider.earnings')->with('status', 'Payout requested: '.money($payout->amount).'. We will check it and send it to your mobile money.');
     }
 
-    /** Riders, and former riders who still have delivery fees on their balance. */
+    /** Riders, station partners, and anyone who still has fees on their balance. */
     public static function canSeeEarnings(User $user): bool
     {
-        return $user->is_rider || LedgerEntry::where('rider_id', $user->id)->exists();
+        return $user->is_rider || Station::where('user_id', $user->id)->exists() || LedgerEntry::where('rider_id', $user->id)->exists();
     }
 
     /**
@@ -121,11 +138,14 @@ class RiderController extends Controller
             'pickup_longitude' => $job->pickup_longitude !== null ? (float) $job->pickup_longitude : null,
             'dropoff_district' => $job->dropoff_district,
             'is_mine' => $mine,
+            'kind' => $job->kind,
+            // Station to station: deliver to the station, not to the buyer (who is not shown).
+            'dropoff_station' => $job->dropoffStation ? ['name' => $job->dropoffStation->name, 'address' => $job->dropoffStation->address, 'district' => $job->dropoffStation->district] : null,
             'order_number' => $mine ? $order->number : null,
             'items' => $mine && $order->relationLoaded('items') ? $order->items->map(fn ($i) => $i->quantity.' × '.$i->display_title)->implode(', ') : null,
-            'buyer_name' => $mine ? $order->recipient_name : null,
-            'buyer_phone' => $mine ? $order->recipient_phone : null,
-            'dropoff_address' => $mine ? trim(($order->address ?? '').($order->landmark ? ' · '.$order->landmark : '')) : null,
+            'buyer_name' => $mine && ! $job->isTransfer() ? $order->recipient_name : null,
+            'buyer_phone' => $mine && ! $job->isTransfer() ? $order->recipient_phone : null,
+            'dropoff_address' => $mine && ! $job->isTransfer() ? trim(($order->address ?? '').($order->landmark ? ' · '.$order->landmark : '')) : null,
             'dropoff_latitude' => $mine && $job->dropoff_latitude !== null ? (float) $job->dropoff_latitude : null,
             'dropoff_longitude' => $mine && $job->dropoff_longitude !== null ? (float) $job->dropoff_longitude : null,
             'code_attempts_left' => max(0, DeliveryService::MAX_CODE_ATTEMPTS - $job->code_attempts),

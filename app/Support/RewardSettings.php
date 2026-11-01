@@ -61,6 +61,21 @@ final class RewardSettings
         'reliability_ship_days' => ['Business buying', 'Shipped within this many days counts as on time (plus lead time)', 'int', 2],
         'risk_price_percent' => ['Business buying', 'Warn when a price is below this % of similar products', 'int', 50],
         'assistant_daily_limit' => ['Business buying', 'AI assistant requests per person per day', 'int', 20],
+
+        // Paid by the seller (taken from their balance), given to the buyer as a WiBuy coupon, never cash.
+        'price_protection_days' => ['Buyer protection', 'Price drop within this many days of buying: the buyer gets the difference as a coupon', 'int', 7],
+        'ship_within_hours' => ['Buyer protection', 'Sellers must ship within this many hours of accepting', 'int', 48],
+        'late_ship_coupon_percent' => ['Buyer protection', 'Late shipping: coupon for this % of the goods', 'int', 5],
+        'late_ship_coupon_max' => ['Buyer protection', 'Late shipping: coupon at most (Le)', 'money', '50.00'],
+        'genuine_compensation_percent' => ['Buyer protection', 'Fake goods with a genuine guarantee: extra coupon, % of the item price (on top of the refund)', 'int', 100],
+        'protection_coupon_days' => ['Buyer protection', 'Days these coupons last', 'int', 30],
+
+        // The buyer pays these at checkout. Partners get their share and riders their fee when the order completes.
+        'station_fee' => ['Pickup stations', 'Station fee the buyer pays (Le)', 'money', '10.00'],
+        'station_transfer_fee' => ['Pickup stations', 'Extra when the buyer collects at another station: the rider who carries it gets this (Le)', 'money', '15.00'],
+        'station_door_fee' => ['Pickup stations', 'Extra for delivery from the station to the door: the rider gets this (Le)', 'money', '20.00'],
+        'station_partner_share' => ['Pickup stations', 'Each partner station that handles a parcel gets (Le)', 'money', '4.00'],
+        'station_max_km' => ['Pickup stations', 'A shop can use a station this many km away at most', 'int', 15],
     ];
 
     public static function int(string $key): int

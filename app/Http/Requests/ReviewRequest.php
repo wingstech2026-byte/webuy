@@ -19,6 +19,17 @@ class ReviewRequest extends FormRequest
             'items' => ['nullable', 'array'],
             'items.*.rating' => ['nullable', 'integer', 'between:1,5'],
             'items.*.comment' => ['nullable', 'string', 'max:1000'],
+            'items.*.photos' => ['nullable', 'array', 'max:4'],
+            'items.*.photos.*' => ['image', 'max:8192'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'items.*.photos.max' => 'Add up to 4 photos for each product.',
+            'items.*.photos.*.image' => 'Only photos can be added to a review.',
+            'items.*.photos.*.max' => 'Each photo can be 8 MB at most.',
         ];
     }
 

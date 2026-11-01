@@ -3,6 +3,16 @@
 <form method="POST" action="{{ $group ? route('groups.join', $group) : route('group-buys.start', $campaign) }}" class="space-y-3">
     @csrf
     @error('general') <p class="field-error">{{ $message }}</p> @enderror
+    @php($options = $campaign->product->variants->where('is_active', true))
+    @if ($options->isNotEmpty())
+        <div><label class="label" for="g-variant">Choose an option</label>
+            <select id="g-variant" name="variant_id" required class="input">
+                <option value="">—</option>
+                @foreach ($options as $option)
+                    <option value="{{ $option->id }}" @selected((int) old('variant_id') === $option->id) @disabled($option->stock < 1)>{{ $option->name }}{{ $option->stock < 1 ? ' (sold out)' : '' }}</option>
+                @endforeach
+            </select></div>
+    @endif
     <div class="grid grid-cols-2 gap-3">
         <div><label class="label" for="g-qty">How many? (up to {{ $campaign->max_quantity_each }})</label>
             <input id="g-qty" name="quantity" type="number" min="1" max="{{ $campaign->max_quantity_each }}" value="{{ old('quantity', 1) }}" required class="input">

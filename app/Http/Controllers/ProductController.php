@@ -6,12 +6,15 @@ use App\Models\GroupBuy;
 use App\Models\GroupBuyCampaign;
 use App\Models\Product;
 use App\Models\WishlistItem;
+use App\Services\RecommendationService;
 use App\Support\BrowsingHistory;
 use App\Support\Money;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
+    public function __construct(private RecommendationService $recommendations) {}
+
     public function show(Request $request, Product $product)
     {
         $user = $request->user();
@@ -27,6 +30,10 @@ class ProductController extends Controller
 
         if ($product->isListed()) {
             $history->viewed($product);
+
+            if ($user) {
+                $this->recommendations->recordView($user, $product);
+            }
         }
 
         // Guests who press "Add to cart" log in first and come back here.
@@ -52,6 +59,7 @@ class ProductController extends Controller
             'openGroups' => $groupOffer ? $groupOffer->groups()->where('status', GroupBuy::OPEN)->where('expires_at', '>', now())->with('leader')->orderBy('expires_at')->limit(5)->get() : collect(),
             'recent' => $history->recent($product, 8),
             'reviews' => $product->reviews()->with('buyer', 'images')->limit(10)->get(),
+            'alsoBought' => $this->recommendations->alsoBought($product, 4),
             'more' => $product->seller->products()->listed()->where('products.id', '!=', $product->id)
                 ->with('images', 'tiers', 'seller')->latest('id')->limit(4)->get(),
             'wishlisted' => $user ? WishlistItem::where('user_id', $user->id)->where('product_id', $product->id)->exists() : false,

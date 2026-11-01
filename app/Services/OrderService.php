@@ -112,6 +112,7 @@ class OrderService
 
             $this->ledger->creditSale($order);
             $this->ledger->creditRider($order);
+            app(StationService::class)->creditOnCompletion($order);
 
             // Sales count only once the order is done.
             $order->items()->get()->each(

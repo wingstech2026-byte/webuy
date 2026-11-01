@@ -14,6 +14,13 @@ class SellerApplicationTest extends TestCase
 {
     use Marketplace;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Storage::fake('local'); // ID card photos go to the private default disk
+    }
+
     private function application(array $overrides = []): array
     {
         return array_merge([
@@ -27,6 +34,8 @@ class SellerApplicationTest extends TestCase
             'business_registration_no' => 'BRS-12345',
             'offers_delivery' => '1',
             'offers_pickup' => '1',
+            'owner_id_number' => 'sl 1234-5678',
+            'owner_id_front' => UploadedFile::fake()->image('id-front.jpg', 1200, 800),
         ], $overrides);
     }
 
@@ -101,7 +110,7 @@ class SellerApplicationTest extends TestCase
 
     public function test_admin_approves_with_a_verified_badge_and_the_seller_is_texted(): void
     {
-        $seller = Seller::factory()->pending()->create(['shop_name' => 'Bo Traders']);
+        $seller = Seller::factory()->pending()->withOwnerIdentity()->create(['shop_name' => 'Bo Traders']);
         $admin = User::factory()->admin()->create();
 
         $this->actingAs($admin)->get(route('admin.sellers.index'))->assertOk()->assertSee('Bo Traders');

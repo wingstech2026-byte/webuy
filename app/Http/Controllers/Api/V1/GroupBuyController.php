@@ -57,7 +57,7 @@ class GroupBuyController extends Controller
         $open = $campaign->groups()->where('status', GroupBuy::OPEN)->where('expires_at', '>', now())->orderBy('expires_at')->limit(10)->get();
 
         return response()->json([
-            'data' => $this->campaignJson($request, $campaign->load('product.seller', 'product.images', 'product.tiers', 'collectionPoint')),
+            'data' => $this->campaignJson($request, $campaign->load('product.seller', 'product.images', 'product.tiers', 'product.variants', 'collectionPoint')),
             // Join a group that is close to complete instead of starting a new one.
             'open_groups' => $open->map(fn ($g) => $this->groups->present($g, $request->user('sanctum')))->values(),
         ]);
@@ -67,22 +67,22 @@ class GroupBuyController extends Controller
     {
         return response()->json([
             'data' => $this->groups->present($group, $request->user('sanctum')),
-            'campaign' => $this->campaignJson($request, $group->campaign->load('product.seller', 'product.images', 'collectionPoint')),
+            'campaign' => $this->campaignJson($request, $group->campaign->load('product.seller', 'product.images', 'product.variants', 'collectionPoint')),
         ]);
     }
 
     public function start(Request $request, GroupBuyCampaign $campaign, DeviceService $devices): JsonResponse
     {
-        [$quantity, $details, $method, $operator, $phone] = $this->order($request);
-        $participant = $this->groups->start($request->user(), $campaign, $quantity, $details, $method, $operator, $phone, $devices->hashFromRequest($request));
+        [$quantity, $details, $method, $operator, $phone, $variantId] = $this->order($request);
+        $participant = $this->groups->start($request->user(), $campaign, $quantity, $details, $method, $operator, $phone, $devices->hashFromRequest($request), $variantId);
 
         return $this->placed($request, $participant);
     }
 
     public function join(Request $request, GroupBuy $group, DeviceService $devices): JsonResponse
     {
-        [$quantity, $details, $method, $operator, $phone] = $this->order($request);
-        $participant = $this->groups->join($request->user(), $group, $quantity, $details, $method, $operator, $phone, $devices->hashFromRequest($request));
+        [$quantity, $details, $method, $operator, $phone, $variantId] = $this->order($request);
+        $participant = $this->groups->join($request->user(), $group, $quantity, $details, $method, $operator, $phone, $devices->hashFromRequest($request), $variantId);
 
         return $this->placed($request, $participant);
     }
@@ -114,6 +114,7 @@ class GroupBuyController extends Controller
         $request->merge(array_map(fn ($v) => PhoneNumber::normalize($v), array_filter($request->only('payer_phone', 'recipient_phone'))));
         $data = $request->validate([
             'quantity' => ['required', 'integer', 'min:1', 'max:1000'],
+            'variant_id' => ['nullable', 'integer'],
             'method' => ['required', Rule::enum(DeliveryMethod::class)],
             'address_id' => ['nullable', 'integer'],
             'recipient_name' => ['nullable', 'string', 'max:80'],
@@ -131,7 +132,7 @@ class GroupBuyController extends Controller
             $details = self::fromSavedAddress(SavedAddress::where('user_id', $user->id)->findOrFail($data['address_id']));
         }
 
-        return [(int) $data['quantity'], $details, $data['method'], Operator::from($data['operator']), $data['payer_phone']];
+        return [(int) $data['quantity'], $details, $data['method'], Operator::from($data['operator']), $data['payer_phone'], isset($data['variant_id']) ? (int) $data['variant_id'] : null];
     }
 
     /** Checkout details from a saved address (the coordinates go with it, server side). */

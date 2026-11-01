@@ -25,10 +25,23 @@
             <p class="mb-4 text-stone-600">Open a shop for free. Buyers pay {{ config('wibuy.name') }} by mobile money, you deliver, and we pay you once the buyer confirms. {{ config('wibuy.name') }} keeps a small commission per order.</p>
         @endif
 
+        {{-- Applied but the ID is missing (or needs a clearer photo): send it on its own. --}}
+        @if ($seller && in_array($seller->status, [\App\Enums\SellerStatus::Pending, \App\Enums\SellerStatus::Suspended], true))
+            <form method="POST" action="{{ route('sell.identity') }}" enctype="multipart/form-data" class="card mb-4 space-y-4 p-5">
+                @csrf
+                @if (! $seller->hasOwnerIdentity())
+                    <p class="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">We need your national ID card before we can approve your shop.</p>
+                @endif
+                @include('sell._identity', ['onFile' => $seller->hasOwnerIdentity()])
+                <button class="btn btn-primary">{{ $seller->hasOwnerIdentity() ? 'Send a new ID photo' : 'Send my ID card' }}</button>
+            </form>
+        @endif
+
         @if ($editable)
             <form method="POST" action="{{ route('sell.store') }}" enctype="multipart/form-data" class="card space-y-4 p-5">
                 @csrf
                 @include('sell.fields', ['seller' => $seller])
+                @include('sell._identity', ['onFile' => $seller?->hasOwnerIdentity()])
                 <button class="btn btn-primary">{{ $seller ? 'Send my application again' : 'Send my application' }}</button>
             </form>
         @endif

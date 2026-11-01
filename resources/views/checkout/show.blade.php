@@ -19,6 +19,17 @@
                 @endforeach
             </select>
         </div>
+        @if ($stations->isNotEmpty())
+            <div class="min-w-56 flex-1">
+                <label for="station-pick" class="label">WiBuy station where you would collect</label>
+                <select id="station-pick" name="station_id" class="input">
+                    <option value="">Choose a station…</option>
+                    @foreach ($stations as $station)
+                        <option value="{{ $station->id }}" @selected($stationId === $station->id)>{{ $station->name }} ({{ $station->district }})</option>
+                    @endforeach
+                </select>
+            </div>
+        @endif
         @if ($coupons->isNotEmpty())
             <div class="min-w-56 flex-1">
                 <label for="coupon-pick" class="label">Coupon</label>
@@ -38,6 +49,7 @@
         @csrf
         <input type="hidden" name="source" value="{{ $source }}">
         <input type="hidden" name="district" value="{{ $district }}">
+        <input type="hidden" name="station_id" value="{{ $stationId }}">
         @if ($summary['coupon'])
             <input type="hidden" name="coupon_id" value="{{ $summary['coupon']->id }}">
         @endif
@@ -80,6 +92,31 @@
                                 <span class="text-sm text-stone-600">{{ $group['can_pickup'] ? $group['seller']->pickup_address.', '.$group['seller']->location : 'This seller does not offer pickup' }}</span>
                             </span>
                         </label>
+                        @if ($group['drop_station'])
+                            {{-- The shop drops it at its nearest WiBuy station. --}}
+                            <label class="choice {{ $summary['groups'][$sellerId]['collect_station'] ? '' : 'opacity-70' }}">
+                                <input type="radio" name="methods[{{ $sellerId }}]" value="station" class="size-5 shrink-0 accent-brand-700"
+                                       @checked($group['method']?->value === 'station') required>
+                                <span>
+                                    <strong class="block">📦 Collect at a WiBuy station &middot; {{ money($group['station_fee']) }}</strong>
+                                    <span class="text-sm text-stone-600">
+                                        @if ($group['collect_station'])
+                                            {{ $group['collect_station']->label() }}. We text you a code when it arrives.
+                                        @else
+                                            Choose your station at the top of the page, then press Update.
+                                        @endif
+                                    </span>
+                                </span>
+                            </label>
+                            <label class="choice">
+                                <input type="radio" name="methods[{{ $sellerId }}]" value="station_door" class="size-5 shrink-0 accent-brand-700"
+                                       @checked($group['method']?->value === 'station_door') required>
+                                <span>
+                                    <strong class="block">🛵 WiBuy brings it to my address &middot; {{ money($group['station_door_fee']) }}</strong>
+                                    <span class="text-sm text-stone-600">A WiBuy rider brings it from the station near the shop. You give the rider the code from our SMS.</span>
+                                </span>
+                            </label>
+                        @endif
                     </fieldset>
                     @error('methods.'.$sellerId) <p class="field-error">{{ $message }}</p> @enderror
 

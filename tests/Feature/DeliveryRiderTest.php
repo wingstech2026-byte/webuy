@@ -81,6 +81,33 @@ class DeliveryRiderTest extends TestCase
         $this->assertSame(OrderStatus::Delivered, $this->order->fresh()->status);
     }
 
+    public function test_the_buyer_follows_the_riders_steps_and_sees_the_phone_only_while_on_the_way(): void
+    {
+        $buyer = $this->order->buyer;
+        $riderPhone = $this->rider->display_phone;
+
+        $this->actingAs($this->seller())->post(route('seller.orders.rider', $this->order));
+        $this->actingAs($buyer)->get(route('orders.show', $this->order))->assertSee('Looking for a WiBuy rider');
+
+        $this->actingAs($this->rider)->post(route('rider.jobs.act', [$this->job(), 'accept']));
+        $this->actingAs($buyer)->get(route('orders.show', $this->order))
+            ->assertSee('The rider is going to the shop to collect your order')->assertSee('Ibrahim Rider')->assertSee($riderPhone);
+
+        $this->actingAs($this->rider)->post(route('rider.jobs.act', [$this->job(), 'picked-up']));
+        Sanctum::actingAs($buyer);
+        $this->getJson("/api/v1/orders/{$this->order->id}")->assertOk()
+            ->assertJsonPath('data.rider_delivery.stage', 'picked_up')
+            ->assertJsonPath('data.rider_delivery.rider_phone', $this->rider->phone)
+            ->assertJsonPath('data.rider_delivery.steps.1.label', 'Rider collected your order')
+            ->assertJsonPath('data.rider_delivery.steps.2.at', null);
+
+        $this->actingAs($this->rider)->post(route('rider.jobs.act', [$this->job(), 'deliver']), ['code' => $this->buyerCode()]);
+        Sanctum::actingAs($buyer);
+        $this->getJson("/api/v1/orders/{$this->order->id}")->assertJsonPath('data.rider_delivery.label', 'Delivered by the WiBuy rider')
+            ->assertJsonPath('data.rider_delivery.rider_phone', null);
+        $this->actingAs($buyer)->get(route('orders.show', $this->order))->assertSee('Delivered by the WiBuy rider')->assertDontSee('tel:+'.$this->rider->phone, false);
+    }
+
     public function test_after_five_wrong_codes_the_code_stops_working(): void
     {
         $this->requestAndTake();

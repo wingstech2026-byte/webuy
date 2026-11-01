@@ -16,3 +16,11 @@ if (! function_exists('phone_display')) {
         return PhoneNumber::display($phone);
     }
 }
+
+if (! function_exists('data_saver')) {
+    /** "Save data" is on: show small pictures instead of full-size ones (a cookie set from the page footer). */
+    function data_saver(): bool
+    {
+        return request()->cookie('data_saver') === '1';
+    }
+}

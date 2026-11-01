@@ -19,8 +19,17 @@ class DeliveryJob extends Model
 
     public const CANCELLED = 'cancelled';
 
+    /** Shop -> buyer's door (the seller asked for a rider). */
+    public const KIND_DOOR = 'door';
+
+    /** WiBuy station -> another WiBuy station (the buyer collects there). */
+    public const KIND_TRANSFER = 'transfer';
+
+    /** WiBuy station -> buyer's door. */
+    public const KIND_STATION_DOOR = 'station_door';
+
     protected $fillable = [
-        'order_id', 'seller_id', 'rider_id', 'status', 'pickup_name', 'pickup_address', 'pickup_latitude', 'pickup_longitude',
+        'order_id', 'seller_id', 'rider_id', 'status', 'kind', 'pickup_station_id', 'dropoff_station_id', 'pickup_name', 'pickup_address', 'pickup_latitude', 'pickup_longitude',
         'dropoff_district', 'dropoff_latitude', 'dropoff_longitude', 'fee', 'proof', 'proof_note',
         'assigned_at', 'picked_up_at', 'delivered_at',
     ];
@@ -38,6 +47,9 @@ class DeliveryJob extends Model
             'assigned_at' => 'datetime',
             'picked_up_at' => 'datetime',
             'delivered_at' => 'datetime',
+            'rider_latitude' => 'decimal:6',
+            'rider_longitude' => 'decimal:6',
+            'rider_located_at' => 'datetime',
         ];
     }
 
@@ -49,6 +61,22 @@ class DeliveryJob extends Model
     public function seller(): BelongsTo
     {
         return $this->belongsTo(Seller::class);
+    }
+
+    public function pickupStation(): BelongsTo
+    {
+        return $this->belongsTo(Station::class, 'pickup_station_id');
+    }
+
+    public function dropoffStation(): BelongsTo
+    {
+        return $this->belongsTo(Station::class, 'dropoff_station_id');
+    }
+
+    /** Station to station: the receiving station confirms it, not the buyer's code. */
+    public function isTransfer(): bool
+    {
+        return $this->kind === self::KIND_TRANSFER;
     }
 
     public function rider(): BelongsTo

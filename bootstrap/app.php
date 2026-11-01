@@ -5,6 +5,7 @@ use App\Http\Middleware\AuditAdminActions;
 use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\EnsureSeller;
 use App\Http\Middleware\RememberVisitor;
+use App\Http\Middleware\SetLanguage;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -20,7 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias(['admin' => EnsureAdmin::class, 'seller' => EnsureSeller::class, 'audit' => AuditAdminActions::class]);
-        $middleware->web(append: [RememberVisitor::class]);
+        $middleware->web(append: [RememberVisitor::class, SetLanguage::class]);
 
         // Payment webhooks come from the gateway, not a browser, so they carry no CSRF token.
         // The handler never trusts the body: it re-fetches the status from the gateway.

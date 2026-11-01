@@ -18,6 +18,7 @@
             'admin.business.*' => ['Businesses', 'admin.business.index'],
             'admin.inspections.*' => ['Inspections', 'admin.inspections.index'],
             'admin.riders.*' => ['Riders', 'admin.riders.index'],
+            'admin.stations.*' => ['Stations', 'admin.stations.index'],
             'admin.global.*' => ['WiBuy Global', 'admin.global.index'],
             'admin.assistant.*' => ['AI assistant', 'admin.assistant.index'],
             'admin.support.*' => ['Support', 'admin.support.index'],

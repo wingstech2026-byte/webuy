@@ -10,16 +10,18 @@ use App\Models\Review;
 use App\Models\Seller;
 use App\Models\SellerReview;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 
 class ReviewService
 {
-    public function __construct(private TrialService $trials, private FarmService $farms) {}
+    public function __construct(private TrialService $trials, private FarmService $farms, private ImageService $images) {}
 
     /**
-     * Rate the seller (once per order) and, optionally, the products in the order (once per item).
+     * Rate the seller (once per order) and, optionally, the products in the order (once per item),
+     * with up to 4 photos of each product as it arrived.
      *
-     * @param  array<int, array{rating: int|string|null, comment?: ?string}>  $itemReviews  order item id => review
+     * @param  array<int, array{rating: int|string|null, comment?: ?string, photos?: list<UploadedFile>}>  $itemReviews  order item id => review
      *
      * @throws MarketplaceException
      */
@@ -63,6 +65,12 @@ class ReviewService
                     'rating' => (int) $input['rating'],
                     'comment' => ($input['comment'] ?? null) ?: null,
                 ]);
+
+                foreach (array_slice(array_values($input['photos'] ?? []), 0, 4) as $position => $photo) {
+                    if ($photo instanceof UploadedFile) {
+                        $this->images->attach($review, $photo, 'review', $buyer->id, $position);
+                    }
+                }
 
                 $this->trials->onReview($review);
                 $touchedProducts[] = $item->product_id;

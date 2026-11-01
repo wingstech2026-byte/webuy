@@ -14,7 +14,10 @@
         <p><strong>Collect at:</strong> {{ $job['pickup_name'] }}, {{ $job['pickup_address'] }}
             @if ($job['pickup_latitude']) &middot; <a class="text-brand-700 underline" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query={{ $job['pickup_latitude'] }},{{ $job['pickup_longitude'] }}">map</a> @endif</p>
 
-        @if ($job['is_mine'])
+        @if ($job['dropoff_station'])
+            <p><strong>Deliver to WiBuy station:</strong> {{ $job['dropoff_station']['name'] }}, {{ $job['dropoff_station']['address'] }} ({{ $job['dropoff_station']['district'] }})</p>
+            <p class="text-sm text-stone-600">The staff there confirm they received it.</p>
+        @elseif ($job['is_mine'])
             <p><strong>Deliver to:</strong> {{ $job['buyer_name'] }}, <a class="text-brand-700" href="tel:+{{ $job['buyer_phone'] }}">{{ $job['buyer_phone'] }}</a><br>{{ $job['dropoff_address'] }} ({{ $job['dropoff_district'] }})
                 @if ($job['dropoff_latitude']) &middot; <a class="text-brand-700 underline" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query={{ $job['dropoff_latitude'] }},{{ $job['dropoff_longitude'] }}">map</a> @endif</p>
             <p class="text-sm text-stone-600">{{ $job['items'] }}</p>
@@ -25,8 +28,10 @@
         @if ($job['status'] === 'open')
             <form method="POST" action="{{ route('rider.jobs.act', [$model, 'accept']) }}">@csrf<button class="btn btn-primary w-full">Take this job</button></form>
         @elseif ($job['status'] === 'assigned')
-            <form method="POST" action="{{ route('rider.jobs.act', [$model, 'picked-up']) }}">@csrf<button class="btn btn-primary w-full">I collected it at the shop</button></form>
+            <form method="POST" action="{{ route('rider.jobs.act', [$model, 'picked-up']) }}">@csrf<button class="btn btn-primary w-full">{{ $job['kind'] === 'door' ? 'I collected it at the shop' : 'I collected it at the station' }}</button></form>
             <form method="POST" action="{{ route('rider.jobs.act', [$model, 'release']) }}" onsubmit="return confirm('Give this job back?')">@csrf<button class="btn btn-outline w-full">Give the job back</button></form>
+        @elseif ($job['status'] === 'picked_up' && $job['dropoff_station'])
+            <p class="rounded-lg bg-brand-50 p-2 font-semibold text-brand-900">Take it to {{ $job['dropoff_station']['name'] }}. The station staff mark it received.</p>
         @elseif ($job['status'] === 'picked_up')
             <form method="POST" action="{{ route('rider.jobs.act', [$model, 'deliver']) }}" class="space-y-2">
                 @csrf
@@ -46,6 +51,28 @@
             </details>
         @elseif ($job['status'] === 'delivered')
             <p class="rounded-lg bg-brand-50 p-2 font-semibold text-brand-900">Delivered ✓ Thank you.</p>
+        @endif
+
+        @if ($job['status'] === 'picked_up')
+            {{-- Live tracking: only while the parcel is with the rider; it stops when it is delivered. --}}
+            <p class="rounded-lg bg-amber-50 p-2 text-sm text-amber-900" data-share-status>📍 Keep this page open: your location is shared with the buyer while you carry this parcel. It stops when you deliver.</p>
+            <script>
+                (() => {
+                    const status = document.querySelector('[data-share-status]');
+                    if (!('geolocation' in navigator)) { status.textContent = '📍 This phone cannot share its location. The buyer sees the steps only.'; return; }
+                    const token = document.querySelector('meta[name=csrf-token]').content;
+                    let last = 0;
+                    navigator.geolocation.watchPosition((p) => {
+                        if (Date.now() - last < 20000) return; // every 20 seconds at most
+                        last = Date.now();
+                        fetch(@json(route('rider.jobs.location', $model)), {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': token },
+                            body: JSON.stringify({ lat: p.coords.latitude, lng: p.coords.longitude }),
+                        }).then((r) => { if (r.ok) status.textContent = '📍 Sharing your location with the buyer (updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '). It stops when you deliver.'; });
+                    }, () => { status.textContent = '📍 Allow location for this page so the buyer can see you are on the way.'; }, { enableHighAccuracy: true, maximumAge: 15000 });
+                })();
+            </script>
         @endif
     </div>
 @endsection
