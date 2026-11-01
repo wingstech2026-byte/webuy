@@ -104,6 +104,8 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         // Photos and chat in the app
         Route::get('/problem-reasons', [V1\DisputeController::class, 'reasons'])->name('disputes.reasons');
         Route::post('/orders/{order}/problem', [V1\DisputeController::class, 'store'])->middleware('throttle:10,1')->name('disputes.store');
+        Route::get('/rider/jobs', [V1\RiderController::class, 'jobs'])->name('rider.jobs');
+        Route::post('/rider/jobs/{deliveryJob}/{action}', [V1\RiderController::class, 'act'])->whereIn('action', ['accept', 'release', 'picked-up', 'deliver'])->middleware('throttle:30,1')->name('rider.jobs.act');
         Route::get('/return-reasons', [V1\ReturnController::class, 'reasons'])->name('returns.reasons');
         Route::post('/orders/{order}/return', [V1\ReturnController::class, 'store'])->middleware('throttle:10,1')->name('returns.store');
         Route::post('/seller/returns/{returnRequest}/{action}', [V1\ReturnController::class, 'act'])

@@ -51,6 +51,9 @@
                             <a href="{{ route('wishlist.index') }}" class="block px-4 py-3 hover:bg-brand-50">Wishlist</a>
                             <a href="{{ route('compare.index') }}" class="block px-4 py-3 hover:bg-brand-50">Compare &amp; recently viewed</a>
                             <a href="{{ route('group-buys.index') }}" class="block px-4 py-3 hover:bg-brand-50">👥 Buy together</a>
+                            @if (auth()->user()->is_rider)
+                                <a href="{{ route('rider.index') }}" class="block px-4 py-3 font-semibold hover:bg-brand-50">🛵 Rider jobs</a>
+                            @endif
                             <a href="{{ route('chat.index') }}" class="block px-4 py-3 hover:bg-brand-50 sm:hidden">Chat @if (($chatUnread ?? 0) > 0) <span class="badge bg-red-600 text-white">{{ $chatUnread }}</span> @endif</a>
                             @if (auth()->user()->isSeller())
                                 <a href="{{ route('seller.dashboard') }}" class="block px-4 py-3 font-bold text-brand-800 hover:bg-brand-50">Seller dashboard</a>

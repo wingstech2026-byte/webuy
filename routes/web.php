@@ -19,6 +19,7 @@ use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PriceCutPageController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ReturnController;
+use App\Http\Controllers\RiderController;
 use App\Http\Controllers\Seller;
 use App\Http\Controllers\SellerApplicationController;
 use App\Http\Controllers\ShareLinkController;
@@ -113,6 +114,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/orders/{order}/problem', [DisputeController::class, 'store'])->middleware('throttle:10,1')->name('disputes.store');
     Route::post('/group-buys/{campaign}/start', [GroupBuyPageController::class, 'start'])->whereNumber('campaign')->middleware('throttle:checkout')->name('group-buys.start');
     Route::post('/g/{group:token}/join', [GroupBuyPageController::class, 'join'])->middleware('throttle:checkout')->name('groups.join');
+    // WiBuy riders: open jobs, my deliveries, and each step
+    Route::get('/rider', [RiderController::class, 'index'])->name('rider.index');
+    Route::get('/rider/jobs/{deliveryJob}', [RiderController::class, 'show'])->name('rider.jobs.show');
+    Route::post('/rider/jobs/{deliveryJob}/{action}', [RiderController::class, 'act'])->whereIn('action', ['accept', 'release', 'picked-up', 'deliver'])->middleware('throttle:30,1')->name('rider.jobs.act');
     Route::get('/orders/{order}/return', [ReturnController::class, 'create'])->name('returns.create');
     Route::post('/orders/{order}/return', [ReturnController::class, 'store'])->middleware('throttle:10,1')->name('returns.store');
     Route::get('/problems/{dispute}', [DisputeController::class, 'show'])->name('disputes.show');
@@ -193,6 +198,10 @@ Route::middleware(['auth', 'seller'])->prefix('seller')->name('seller.')->group(
     Route::post('/promotions/trial-applications/{trialApplication}/reject', [Seller\PromotionController::class, 'reject'])->name('promotions.trials.reject');
     Route::post('/problems/{dispute}/respond', [Seller\DisputeController::class, 'respond'])->name('disputes.respond');
 
+    // A WiBuy rider for a delivery order
+    Route::post('/orders/{order}/rider', [Seller\DeliveryController::class, 'request'])->name('orders.rider');
+    Route::post('/deliveries/{deliveryJob}/cancel', [Seller\DeliveryController::class, 'cancel'])->name('deliveries.cancel');
+
     // Returns from buyers
     Route::post('/returns/{returnRequest}/accept', [Seller\ReturnController::class, 'accept'])->name('returns.accept');
     Route::post('/returns/{returnRequest}/refuse', [Seller\ReturnController::class, 'refuse'])->name('returns.refuse');
@@ -214,6 +223,8 @@ Route::middleware(['auth', 'admin', 'audit'])->prefix('admin')->name('admin.')->
     Route::get('/', Admin\DashboardController::class)->name('dashboard');
     Route::get('/audit', [Admin\AuditLogController::class, 'index'])->name('audit');
     Route::get('/staff', [Admin\StaffController::class, 'index'])->name('staff.index');
+    Route::get('/riders', [Admin\RiderController::class, 'index'])->name('riders.index');
+    Route::post('/riders/toggle', [Admin\RiderController::class, 'toggle'])->name('riders.toggle');
     Route::post('/staff', [Admin\StaffController::class, 'store'])->name('staff.store');
     Route::post('/staff/{user}/remove', [Admin\StaffController::class, 'remove'])->name('staff.remove');
     Route::get('/group-buys', [Admin\GroupBuyController::class, 'index'])->name('group-buys.index');

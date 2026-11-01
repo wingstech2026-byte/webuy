@@ -72,6 +72,16 @@
                 </div>
             @endif
 
+            @if ($order->deliveryJob && in_array($order->deliveryJob->status, ['assigned', 'picked_up'], true))
+                <div class="card space-y-1 p-4 text-sm">
+                    <p class="font-bold">🛵 {{ $order->deliveryJob->statusLabel() }}</p>
+                    <p>Rider: {{ $order->deliveryJob->rider?->name }} &middot; {{ $order->deliveryJob->rider?->display_phone }}</p>
+                    @if ($order->deliveryJob->status === 'picked_up')
+                        <p class="text-stone-600">We sent you a 4-digit code by SMS. Give it to the rider only when you have your goods.</p>
+                    @endif
+                </div>
+            @endif
+
             @if ($order->returnRequest)
                 @include('returns._panel', ['forSeller' => false])
             @elseif ($order->status === OrderStatus::Delivered)

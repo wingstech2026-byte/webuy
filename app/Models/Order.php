@@ -138,6 +138,11 @@ class Order extends Model
         return $this->hasOne(ReturnRequest::class);
     }
 
+    public function deliveryJob(): HasOne
+    {
+        return $this->hasOne(DeliveryJob::class);
+    }
+
     public function milestones(): HasMany
     {
         return $this->hasMany(OrderMilestone::class)->orderBy('position');

@@ -22,6 +22,7 @@ class UserResource extends JsonResource
             'is_seller' => $this->isSeller(),
             'is_admin' => $this->is_admin,
             'is_agent' => (bool) $this->is_agent,
+            'is_rider' => (bool) $this->is_rider,
             'business_status' => $this->businessProfile?->status, // null | pending | verified | rejected
         ];
     }

@@ -46,7 +46,7 @@ class OrderController extends Controller
     {
         $this->authorize('manage', $order);
 
-        return view('seller.orders.show', ['order' => $order->load('items', 'buyer', 'openDispute')]);
+        return view('seller.orders.show', ['order' => $order->load('items', 'buyer', 'openDispute', 'deliveryJob.rider')]);
     }
 
     public function accept(Order $order): RedirectResponse

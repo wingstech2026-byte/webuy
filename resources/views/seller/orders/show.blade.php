@@ -27,7 +27,22 @@
                     </form>
                 </details>
             </div>
+        @elseif ($order->status === OrderStatus::Accepted && $order->deliveryJob?->isActive())
+            <div class="card space-y-2 p-4">
+                <p class="font-bold">🛵 WiBuy rider: {{ $order->deliveryJob->statusLabel() }}</p>
+                @if ($order->deliveryJob->rider) <p class="text-sm">{{ $order->deliveryJob->rider->name }} &middot; {{ $order->deliveryJob->rider->display_phone }}</p> @endif
+                <p class="text-sm text-stone-600">The order is marked shipped when the rider collects it.</p>
+                <form method="POST" action="{{ route('seller.deliveries.cancel', $order->deliveryJob) }}">@csrf<button class="btn btn-outline btn-sm">Cancel the rider (I will deliver myself)</button></form>
+            </div>
         @elseif ($order->status === OrderStatus::Accepted)
+            @unless ($order->isPickup())
+                <form method="POST" action="{{ route('seller.orders.rider', $order) }}" class="card space-y-2 p-4">
+                    @csrf
+                    <p class="font-bold">🛵 Need someone to deliver it?</p>
+                    <p class="text-sm text-stone-600">A WiBuy rider collects it from your shop and hands it over with the buyer's code. The rider is paid the delivery fee ({{ money($order->delivery_fee) }}).</p>
+                    <button class="btn btn-primary">Request a WiBuy rider</button>
+                </form>
+            @endunless
             <form method="POST" action="{{ route('seller.orders.ship', $order) }}" class="card space-y-3 p-4">
                 @csrf
                 <p class="font-bold">{{ $order->isPickup() ? 'When it is packed, tell the buyer it is ready for pickup.' : 'When you send it, mark it as shipped.' }}</p>

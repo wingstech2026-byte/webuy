@@ -27,6 +27,7 @@ final class AdminAccess
         'admin.users.*' => [AdminRole::Support],
         'admin.inspections.*' => [AdminRole::Support],
         'admin.agents.*' => [AdminRole::Support],
+        'admin.riders.*' => [AdminRole::Support],
         'admin.assistant.*' => [AdminRole::Support],
 
         'admin.sellers.*' => [AdminRole::Catalogue],

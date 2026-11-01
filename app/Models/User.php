@@ -34,6 +34,7 @@ class User extends Authenticatable
             'is_admin' => 'boolean',
             'admin_role' => AdminRole::class,
             'is_agent' => 'boolean',
+            'is_rider' => 'boolean',
             'last_login_at' => 'datetime',
             'chat_banned_at' => 'datetime',
         ];
@@ -42,6 +43,12 @@ class User extends Authenticatable
     public function seller(): HasOne
     {
         return $this->hasOne(Seller::class);
+    }
+
+    /** Deliveries this user took as a WiBuy rider. */
+    public function deliveries(): HasMany
+    {
+        return $this->hasMany(DeliveryJob::class, 'rider_id');
     }
 
     public function cart(): HasOne
