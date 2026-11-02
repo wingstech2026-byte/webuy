@@ -18,6 +18,8 @@ class AddToCartRequest extends FormRequest
             // The chosen option (size, colour...) when the product has variants.
             'variant' => ['nullable', 'integer'],
             'buy_now' => ['nullable', 'boolean'],
+            'addons' => ['nullable', 'array', 'max:20'], // extras for a dish
+            'addons.*' => ['integer'],
         ];
     }
 

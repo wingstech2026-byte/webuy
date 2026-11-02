@@ -55,8 +55,12 @@ class ProductQuestionService
         return $question;
     }
 
-    /** @throws MarketplaceException */
-    private function refuseContactDetails(string $text): void
+    /**
+     * Also used for live comments.
+     *
+     * @throws MarketplaceException
+     */
+    public static function refuseContactDetails(string $text): void
     {
         // Phone numbers (7+ digits) and "pay me directly" would take buyers outside WiBuy's protection.
         if (preg_match('/(\d[\s\-]?){7,}/', $text) || preg_match('/\b(whats?app|orange money|afrimoney|pay (me )?direct)/i', $text)) {

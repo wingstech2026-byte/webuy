@@ -44,7 +44,8 @@ class LedgerService
                 'order_id' => $order->id,
                 'type' => LedgerType::Sale,
                 // Station orders: the whole delivery fee is for the stations and riders, never the seller.
-                'amount' => Money::sub(Money::sub($kept, $commission), $order->viaStation() ? $order->delivery_fee : ($riderJob->fee ?? '0.00')),
+                // The tip goes to the WiBuy rider who delivered (the shop keeps it when it delivered itself).
+                'amount' => Money::sub(Money::sub(Money::sub($kept, $commission), $order->viaStation() ? $order->delivery_fee : ($riderJob->fee ?? '0.00')), $riderJob ? ($order->rider_tip ?? '0.00') : '0.00'),
                 'description' => "Order {$order->number} completed".match (true) {
                     ! Money::isZero($order->returned_value ?? '0.00') => ' (returned items left out)',
                     $order->viaStation() => ' (station fees paid to WiBuy stations and riders)',
@@ -61,6 +62,20 @@ class LedgerService
     public function creditRider(Order $order): ?LedgerEntry
     {
         $job = $this->riderJobOf($order);
+
+        if ($job !== null && Money::gt($order->rider_tip ?? '0.00', 0)) {
+            try {
+                DB::transaction(fn () => LedgerEntry::create([
+                    'rider_id' => $job->rider_id,
+                    'order_id' => $order->id,
+                    'type' => LedgerType::RiderTip,
+                    'amount' => Money::from($order->rider_tip),
+                    'description' => "Tip from the buyer of order {$order->number}",
+                ]));
+            } catch (UniqueConstraintViolationException) {
+                // already credited
+            }
+        }
 
         if ($job === null || Money::isZero($job->fee)) {
             return null;

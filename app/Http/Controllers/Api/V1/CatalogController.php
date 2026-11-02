@@ -10,8 +10,10 @@ use App\Http\Resources\Api\V1\ReviewResource;
 use App\Http\Resources\Api\V1\SellerResource;
 use App\Models\Product;
 use App\Models\Seller;
+use App\Services\FollowService;
 use App\Services\RecommendationService;
 use App\Services\SearchService;
+use App\Services\ShopOfferService;
 use App\Services\SponsoredProductService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -94,17 +96,26 @@ class CatalogController extends Controller
             'data' => (new ProductResource($product))->detailed(),
             'also_bought' => ProductResource::collection($recommendations->alsoBought($product, 6)),
             'reviews' => ReviewResource::collection($product->reviews()->with('buyer', 'images')->limit(10)->get()),
+            // Extras for a dish, the shop's offers on it and bundles with it.
+            'addons' => $product->addons->map(fn ($a) => ['id' => $a->id, 'name' => $a->name, 'price' => (string) $a->price])->values(),
+            'offers' => ($shop = app(ShopOfferService::class)->forProduct($product))['offers']->map(fn ($o) => ['label' => $o->label])->values(),
+            'bundles' => $shop['bundles']->map(fn ($b) => [
+                'id' => $b->id, 'title' => $b->title, 'price' => (string) $b->price, 'normal_price' => $b->normalPrice(),
+                'items' => $b->products->map(fn ($p) => $p->pivot->quantity.' × '.$p->title)->values(),
+            ])->values(),
             'questions' => $product->questions()->public()->latest('answered_at')->limit(10)->get()
                 ->map(fn ($q) => ['question' => $q->question, 'answer' => $q->answer, 'answered_at' => $q->answered_at?->toIso8601String()])->values(),
         ]);
     }
 
-    public function shop(Seller $seller): JsonResponse
+    public function shop(Request $request, Seller $seller): JsonResponse
     {
         abort_unless($seller->isApproved(), 404);
 
         return response()->json([
             'data' => new SellerResource($seller->load('logo')),
+            'followers' => $seller->followers()->count(),
+            'is_following' => app(FollowService::class)->follows($request->user('sanctum'), $seller),
             'products' => ProductResource::collection($this->search->search(['seller' => $seller->id], 40)),
         ]);
     }

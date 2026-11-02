@@ -51,6 +51,15 @@ return [
         'url' => env('ROUTING_URL'), // e.g. a self-hosted OSRM: http://osrm.internal:5000
     ],
 
+    // Ordering by SMS and USSD for people without data: the gateway posts incoming texts to
+    // /webhooks/sms?token=... and USSD sessions to /webhooks/ussd?token=... Off until switched on.
+    'sms_ordering' => [
+        'enabled' => (bool) env('SMS_ORDERING_ENABLED', false),
+        'token' => env('SMS_ORDERING_TOKEN'),          // a long random secret, also typed into the gateway's callback URL
+        'number' => env('SMS_ORDERING_NUMBER'),        // the number buyers text, shown on product pages
+        'ussd_code' => env('SMS_ORDERING_USSD_CODE'),  // e.g. *123#
+    ],
+
     // WhatsApp Business Cloud API (Meta). Shoppers text or send a photo; WiBuy replies with matching products.
     // Webhook: https://<your site>/webhooks/whatsapp, with WHATSAPP_VERIFY_TOKEN as the verify token.
     'whatsapp' => [

@@ -94,14 +94,15 @@ function setupCheckoutTotals() {
     const form = document.querySelector('[data-checkout]');
     if (!form) return;
 
-    form.querySelectorAll('input[name^="methods["]').forEach((radio) => {
+    form.querySelectorAll('input[name^="methods["], input[name^="tips["]').forEach((radio) => {
         radio.addEventListener('change', () => {
             const params = new URLSearchParams();
-            ['source', 'product', 'qty', 'district', 'coupon_id'].forEach((name) => {
+            ['source', 'product', 'qty', 'variant', 'district', 'coupon_id', 'promo_code', 'team', 'latitude', 'longitude', 'station_id'].forEach((name) => {
                 const field = form.querySelector(`[name="${name}"]`);
                 if (field && field.value && name !== 'source') params.set(name, field.value);
             });
-            form.querySelectorAll('input[name^="methods["]:checked').forEach((checked) => params.set(checked.name, checked.value));
+            form.querySelectorAll('input[name="addons[]"]').forEach((field) => params.append('addons[]', field.value));
+            form.querySelectorAll('input[name^="methods["]:checked, input[name^="tips["]:checked').forEach((checked) => params.set(checked.name, checked.value));
             window.location = `${form.dataset.recalcUrl}?${params.toString()}`;
         });
     });

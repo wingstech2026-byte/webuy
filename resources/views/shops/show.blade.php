@@ -20,8 +20,14 @@
                 {{ $seller->shop_name }}
                 @if ($seller->is_verified) <span class="badge bg-brand-100 text-brand-800">✓ Verified seller</span> @endif
             </h1>
-            <p class="text-stone-600">{{ $seller->location }}</p>
+            <p class="text-stone-600">{{ $seller->location }} &middot; {{ $seller->followers()->count() }} follower(s)</p>
             <x-stars :rating="$seller->rating_avg" :count="$seller->rating_count" />
+            @auth
+                @if (auth()->id() !== $seller->user_id)
+                    @php($isFollowing = app(\App\Services\FollowService::class)->follows(auth()->user(), $seller))
+                    <form method="POST" action="{{ route('shops.follow', $seller) }}" class="mt-2">@csrf<button class="btn btn-sm {{ $isFollowing ? 'btn-outline' : 'btn-primary' }}">{{ $isFollowing ? '✓ Following' : '+ Follow' }}</button></form>
+                @endif
+            @endauth
             <p class="mt-1 text-sm font-semibold" title="On-time delivery, cancellations and problem reports in the last 90 days">
                 Delivery reliability: {{ $seller->reliability_score === null ? 'New shop' : $seller->reliability_score.'/100' }}
             </p>

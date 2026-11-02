@@ -43,6 +43,7 @@
                         @endif
                     </a>
                     <a href="{{ route('instant.index') }}" class="whitespace-nowrap rounded-lg px-2 py-2 hover:bg-brand-800">⚡ {{ __('Instant') }}</a>
+                    <a href="{{ route('live.index') }}" class="hidden whitespace-nowrap rounded-lg px-2 py-2 hover:bg-brand-800 sm:inline-block">🔴 {{ __('Live') }}</a>
                     <a href="{{ route('orders.index') }}" class="whitespace-nowrap rounded-lg px-2 py-2 hover:bg-brand-800">{{ __('Orders') }}</a>
                     <a href="{{ route('chat.index') }}" class="hidden whitespace-nowrap rounded-lg px-2 py-2 hover:bg-brand-800 sm:inline-block">{{ __('Chat') }} <span data-unread-badge data-url="{{ route('chat.unread') }}" class="{{ ($chatUnread ?? 0) > 0 ? '' : 'hidden' }} ml-0.5 inline-flex min-w-5 justify-center rounded-full bg-red-500 px-1.5 text-xs font-extrabold text-white">{{ ($chatUnread ?? 0) > 99 ? '99+' : ($chatUnread ?? 0) }}</span></a>
                     <details class="relative">
@@ -51,6 +52,8 @@
                             <p class="border-b border-stone-100 px-4 py-2 text-xs text-stone-500">{{ auth()->user()->name ?: auth()->user()->display_phone }}</p>
                             <a href="{{ route('account.details') }}" class="block px-4 py-3 hover:bg-brand-50">👤 My details</a>
                             <a href="{{ route('wishlist.index') }}" class="block px-4 py-3 hover:bg-brand-50">{{ __('Wishlist') }}</a>
+                            <a href="{{ route('following.index') }}" class="block px-4 py-3 hover:bg-brand-50">❤ {{ __('Following') }}</a>
+                            <a href="{{ route('invite.show') }}" class="block px-4 py-3 hover:bg-brand-50">🎁 {{ __('Invite friends') }}</a>
                             <a href="{{ route('compare.index') }}" class="block px-4 py-3 hover:bg-brand-50">{{ __('Compare & recently viewed') }}</a>
                             <a href="{{ route('group-buys.index') }}" class="block px-4 py-3 hover:bg-brand-50">👥 Buy together</a>
                             @if (\App\Models\Station::where('user_id', auth()->id())->exists())

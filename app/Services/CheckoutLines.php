@@ -20,7 +20,7 @@ class CheckoutLines
      *
      * @throws MarketplaceException
      */
-    public function resolve(User $user, ?string $productSlug = null, ?int $quantity = null, bool $sample = false, ?int $variantId = null): array
+    public function resolve(User $user, ?string $productSlug = null, ?int $quantity = null, bool $sample = false, ?int $variantId = null, array $addonIds = []): array
     {
         if ($sample) {
             $product = Product::where('slug', (string) $productSlug)->with(['seller.deliveryAreas', 'tiers', 'images', 'variants'])->first();
@@ -49,7 +49,10 @@ class CheckoutLines
                 throw new MarketplaceException("{$product->title}: {$problem}.");
             }
 
-            return [collect([['product' => $product, 'variant' => $variant, 'quantity' => $quantity]]), 'buy'];
+            $key = $this->cart->addonKey($product, $addonIds);
+            $addons = $key === '' ? collect() : $product->addons()->whereIn('id', explode(',', $key))->get();
+
+            return [collect([['product' => $product, 'variant' => $variant, 'addons' => $addons, 'quantity' => $quantity]]), 'buy'];
         }
 
         $lines = $this->cart->lines($user);
@@ -62,6 +65,6 @@ class CheckoutLines
             throw new MarketplaceException("{$bad['product']->title}: {$bad['problem']}. Please fix your cart first.");
         }
 
-        return [$lines->map(fn (array $line): array => ['product' => $line['product'], 'variant' => $line['variant'], 'quantity' => $line['quantity']])->values(), 'cart'];
+        return [$lines->map(fn (array $line): array => ['product' => $line['product'], 'variant' => $line['variant'], 'addons' => $line['addons'], 'quantity' => $line['quantity']])->values(), 'cart'];
     }
 }

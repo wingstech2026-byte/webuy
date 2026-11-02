@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\ProductCondition;
 use App\Enums\ProductStatus;
 use App\Enums\SellerStatus;
+use App\Services\FollowService;
 use App\Support\Money;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -140,11 +141,24 @@ class Product extends Model
     /** Restocked above the low-stock line: the shop may be told again next time. */
     protected static function booted(): void
     {
+        // A new product on sale: the shop's followers hear about it (once a day per shop).
+        static::created(function (Product $product) {
+            if ($product->status === ProductStatus::Active) {
+                app(FollowService::class)->productPublished($product);
+            }
+        });
+
         static::saving(function (Product $product) {
             if ($product->isDirty('stock') && $product->stock > 5) {
                 $product->low_stock_notified_at = null;
             }
         });
+    }
+
+    /** Extras for a dish (extra meat, extra pepper), cheapest first. */
+    public function addons(): HasMany
+    {
+        return $this->hasMany(ProductAddon::class)->where('is_active', true)->orderBy('position')->orderBy('id');
     }
 
     public function questions(): HasMany

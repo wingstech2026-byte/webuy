@@ -45,6 +45,8 @@ class Order extends Model
             'stock_reserved' => 'boolean',
             'expires_at' => 'datetime',
             'paid_at' => 'datetime',
+            'shop_discount' => 'decimal:2',
+            'rider_tip' => 'decimal:2',
             'is_instant' => 'boolean',
             'deliver_at' => 'datetime',
             'food_ready_at' => 'datetime',
@@ -221,7 +223,7 @@ class Order extends Model
             },
             'rider_name' => $job->rider?->name,
             'rider_phone' => $active ? $job->rider?->phone : null,
-            // Live: where the rider is, how far and how long (only while the parcel is with the rider).
+            // Live: where the rider is, how far and how long (from when the rider accepts until delivery).
             'tracking' => app(RiderTrackingService::class)->tracking($job),
             // After a door delivery the buyer can rate the rider once.
             'can_rate' => $job->status === DeliveryJob::DELIVERED && ! $job->isTransfer() && $job->rider_id !== null && $job->rating === null,

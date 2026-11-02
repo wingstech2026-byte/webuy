@@ -7,10 +7,11 @@ use App\Models\DeliveryJob;
 use App\Models\User;
 
 /**
- * Live tracking of a parcel while a WiBuy rider carries it. The rider's phone sends its position every few
- * seconds; only the LATEST position is kept (no route history), only the buyer of that order sees it, only
- * while the parcel is with the rider, and it is wiped when the delivery ends. Buyers and sellers are never
- * tracked. The buyer also gets "about 3 km away" and "less than 1 km away" messages.
+ * Live tracking of a WiBuy rider on a delivery, from the moment they accept it: first riding to the shop
+ * ("picks up your order in about 5 min"), then bringing the parcel. The rider's phone sends its position every
+ * few seconds; only the LATEST position is kept (no route history), only the buyer of that order sees it, only
+ * during that delivery, and it is wiped when the delivery ends. Buyers and sellers are never tracked. The buyer
+ * also gets "about 3 km away" and "less than 1 km away" messages.
  */
 class RiderTrackingService
 {
@@ -40,8 +41,8 @@ class RiderTrackingService
             throw new MarketplaceException('This delivery is not yours.');
         }
 
-        if ($job->status !== DeliveryJob::PICKED_UP) {
-            throw new MarketplaceException('Your location is only shared while you carry the parcel.');
+        if (! in_array($job->status, [DeliveryJob::ASSIGNED, DeliveryJob::PICKED_UP], true)) {
+            throw new MarketplaceException('Your location is only shared during a delivery you took.');
         }
 
         $this->geo->assertValid($lat, $lng);
@@ -54,22 +55,25 @@ class RiderTrackingService
     }
 
     /**
-     * What the buyer sees: the rider's latest point, the destination, distance and arrival estimate.
-     * Null when the parcel is not with a rider (or the rider never shared a position).
+     * What the buyer sees: the rider's latest point, where they are heading (the shop first, then the buyer),
+     * distance and arrival estimate. Null when no rider is on the job (or the rider never shared a position).
      *
-     * @return ?array{rider: array{lat: float, lng: float}, destination: ?array{lat: float, lng: float}, km: ?float, minutes: ?int, live: bool, updated_at: string, to_station: ?string}
+     * @return ?array{phase: string, rider: array{lat: float, lng: float}, destination: ?array{lat: float, lng: float}, km: ?float, minutes: ?int, live: bool, updated_at: string, to_station: ?string}
      */
     public function tracking(DeliveryJob $job): ?array
     {
-        if ($job->status !== DeliveryJob::PICKED_UP || ! $job->rider_located_at) {
+        if (! in_array($job->status, [DeliveryJob::ASSIGNED, DeliveryJob::PICKED_UP], true) || ! $job->rider_located_at) {
             return null;
         }
 
+        $toShop = $job->status === DeliveryJob::ASSIGNED;
         $rider = ['lat' => (float) $job->rider_latitude, 'lng' => (float) $job->rider_longitude];
-        $destination = $job->dropoff_latitude !== null ? ['lat' => (float) $job->dropoff_latitude, 'lng' => (float) $job->dropoff_longitude] : null;
+        [$lat, $lng] = $toShop ? [$job->pickup_latitude, $job->pickup_longitude] : [$job->dropoff_latitude, $job->dropoff_longitude];
+        $destination = $lat !== null ? ['lat' => (float) $lat, 'lng' => (float) $lng] : null;
         $km = $destination ? round($this->geo->distanceKm($rider['lat'], $rider['lng'], $destination['lat'], $destination['lng']) * self::ROAD_FACTOR, 1) : null;
 
         return [
+            'phase' => $toShop ? 'to_shop' : 'to_you', // riding to the shop to collect, or bringing the parcel
             'rider' => $rider,
             'destination' => $destination,
             'km' => $km,
@@ -88,7 +92,7 @@ class RiderTrackingService
 
     private function maybeTellBuyer(DeliveryJob $job, ?array $tracking): void
     {
-        if ($tracking === null || $tracking['km'] === null) {
+        if ($tracking === null || $tracking['km'] === null || $tracking['phase'] !== 'to_you') {
             return;
         }
 

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\AddToCartRequest;
 use App\Http\Resources\Api\V1\CartLineResource;
 use App\Http\Resources\Api\V1\SellerResource;
+use App\Models\Bundle;
 use App\Models\CartItem;
 use App\Models\Product;
 use App\Services\CartService;
@@ -25,7 +26,19 @@ class CartController extends Controller
 
     public function store(AddToCartRequest $request, Product $product): JsonResponse
     {
-        $this->cart->add($request->user(), $product, (int) $request->validated('quantity'), $request->validated('variant') !== null ? (int) $request->validated('variant') : null);
+        $this->cart->add($request->user(), $product, (int) $request->validated('quantity'), $request->validated('variant') !== null ? (int) $request->validated('variant') : null, $request->validated('addons') ?? []);
+
+        return response()->json($this->payload($request), 201);
+    }
+
+    /** Every item of a bundle into the cart; the bundle price is taken off at checkout. */
+    public function bundle(Request $request, Bundle $bundle): JsonResponse
+    {
+        abort_unless($bundle->is_active, 404);
+
+        foreach ($bundle->products as $product) {
+            $this->cart->add($request->user(), $product, (int) $product->pivot->quantity);
+        }
 
         return response()->json($this->payload($request), 201);
     }

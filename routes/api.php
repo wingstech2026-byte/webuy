@@ -16,6 +16,9 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
     Route::get('/products', [V1\CatalogController::class, 'products'])->name('products.index');
     Route::get('/products/{product:slug}', [V1\CatalogController::class, 'product'])->name('products.show');
     Route::get('/shops/{seller:slug}', [V1\CatalogController::class, 'shop'])->name('shops.show');
+    // Live selling
+    Route::get('/live', [V1\LiveController::class, 'index'])->name('live.index');
+    Route::get('/live/{liveSession}', [V1\LiveController::class, 'show'])->middleware('throttle:120,1')->name('live.show');
     // Instant food near a spot, and an office team order (anyone with its link)
     Route::get('/instant', [V1\InstantController::class, 'nearby'])->middleware('throttle:60,1')->name('instant');
     Route::get('/team/{teamOrder:token}', [V1\InstantController::class, 'team'])->name('team.show');
@@ -58,6 +61,11 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('/orders/{order}/confirm', [V1\OrderController::class, 'confirm'])->name('orders.confirm');
         Route::post('/orders/{order}/cancel', [V1\OrderController::class, 'cancel'])->middleware('throttle:10,1')->name('orders.cancel');
         // Instant food and office team orders
+        Route::post('/live/{liveSession}/comments', [V1\LiveController::class, 'comment'])->middleware('throttle:20,1')->name('live.comment');
+        Route::post('/shops/{seller:slug}/follow', [V1\FollowController::class, 'toggle'])->middleware('throttle:30,1')->name('shops.follow');
+        Route::get('/following', [V1\FollowController::class, 'feed'])->name('following');
+        Route::get('/invite', [V1\FollowController::class, 'invite'])->name('invite');
+        Route::post('/bundles/{bundle}/cart', [V1\CartController::class, 'bundle'])->middleware('throttle:cart')->name('bundles.cart');
         Route::post('/team', [V1\InstantController::class, 'startTeam'])->middleware('throttle:10,1')->name('team.store');
         Route::post('/team/{teamOrder:token}/close', [V1\InstantController::class, 'closeTeam'])->name('team.close');
         Route::post('/rider/available', [V1\InstantController::class, 'riderAvailable'])->middleware('throttle:20,1')->name('rider.available');

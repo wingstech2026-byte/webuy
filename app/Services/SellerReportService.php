@@ -10,6 +10,7 @@ use App\Models\Seller;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * A seller's sales report: totals for a period, sales week by week, best sellers and products running low.
@@ -60,11 +61,65 @@ class SellerReportService
             'previous_sales' => Money::from($this->sold($seller)->whereBetween('paid_at', [$from->subDays($days), $from])->sum('subtotal')),
             'weeks' => $this->weeks($seller, $now),
             'best_sellers' => $this->bestSellers($seller, $from),
+            // Per product: who looked, who put it in the cart, who bought (the biggest audiences first).
+            'funnel' => $this->funnel($seller, $from),
+            // When buyers pay: orders per hour of the day.
+            'hours' => $this->hours($seller, $from),
+            // "Rice runs out in about 4 days", from the last 14 days of sales.
+            'forecast' => $this->forecast($seller, $now),
             'low_stock' => $seller->products()->where('status', ProductStatus::Active)->where('stock', '<=', self::LOW_STOCK)
                 ->orderBy('stock')->orderBy('title')->limit(10)->get(['id', 'slug', 'title', 'stock', 'unit', 'status'])
                 ->map(fn ($p) => ['id' => $p->id, 'slug' => $p->slug, 'title' => $p->title, 'stock' => (int) $p->stock, 'unit' => $p->unit, 'status' => $p->status->value])
                 ->all(),
         ];
+    }
+
+    /** @return list<array{product_id: int, title: string, views: int, carts: int, orders: int, conversion: ?float}> */
+    private function funnel(Seller $seller, CarbonImmutable $from): array
+    {
+        $ids = $seller->products()->pluck('id');
+        $views = DB::table('product_views')->whereIn('product_id', $ids)->where('viewed_at', '>=', $from)->selectRaw('product_id, count(*) as n')->groupBy('product_id')->pluck('n', 'product_id');
+        $carts = DB::table('cart_items')->whereIn('product_id', $ids)->where('created_at', '>=', $from)->selectRaw('product_id, count(*) as n')->groupBy('product_id')->pluck('n', 'product_id');
+        $orders = OrderItem::whereIn('order_id', $this->sold($seller)->where('paid_at', '>=', $from)->select('id'))
+            ->selectRaw('product_id, count(distinct order_id) as n')->groupBy('product_id')->pluck('n', 'product_id');
+
+        return $seller->products()->whereIn('id', $views->keys()->merge($carts->keys())->merge($orders->keys())->unique())->get(['id', 'title'])
+            ->map(fn ($p) => [
+                'product_id' => $p->id,
+                'title' => $p->title,
+                'views' => (int) ($views[$p->id] ?? 0),
+                'carts' => (int) ($carts[$p->id] ?? 0),
+                'orders' => (int) ($orders[$p->id] ?? 0),
+                'conversion' => ($views[$p->id] ?? 0) > 0 ? round(100 * ($orders[$p->id] ?? 0) / $views[$p->id], 1) : null,
+            ])
+            ->sortByDesc(fn ($row) => [$row['views'], $row['orders']])->take(10)->values()->all();
+    }
+
+    /** @return list<int> 24 numbers: paid orders in each hour of the day (Freetown time) */
+    private function hours(Seller $seller, CarbonImmutable $from): array
+    {
+        $hours = array_fill(0, 24, 0);
+
+        foreach ($this->sold($seller)->where('paid_at', '>=', $from)->pluck('paid_at') as $paidAt) {
+            $hours[(int) CarbonImmutable::parse($paidAt)->format('G')]++;
+        }
+
+        return $hours;
+    }
+
+    /** @return list<array{id: int, slug: string, title: string, stock: int, per_day: float, days_left: int}> products running out within 2 weeks */
+    private function forecast(Seller $seller, CarbonImmutable $now): array
+    {
+        $sold = OrderItem::whereIn('order_id', $this->sold($seller)->where('paid_at', '>=', $now->subDays(14))->select('id'))
+            ->selectRaw('product_id, sum(quantity) as quantity')->groupBy('product_id')->pluck('quantity', 'product_id');
+
+        return $seller->products()->where('status', ProductStatus::Active)->whereIn('id', $sold->keys())->get(['id', 'slug', 'title', 'stock'])
+            ->map(function ($p) use ($sold) {
+                $perDay = round($sold[$p->id] / 14, 2);
+
+                return ['id' => $p->id, 'slug' => $p->slug, 'title' => $p->title, 'stock' => (int) $p->stock, 'per_day' => $perDay, 'days_left' => (int) floor($p->stock / max($perDay, 0.01))];
+            })
+            ->filter(fn ($row) => $row['days_left'] <= 14)->sortBy('days_left')->values()->all();
     }
 
     /** Orders that are sales: paid and not refunded, cancelled or rejected. */

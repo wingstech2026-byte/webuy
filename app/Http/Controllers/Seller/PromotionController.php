@@ -25,6 +25,8 @@ class PromotionController extends Controller
             'products' => $seller->products()->listed()->orderBy('title')->get(['id', 'title', 'slug', 'price']),
             'cuts' => PriceCutCampaign::whereIn('product_id', $seller->products()->select('id'))->with('product')->withCount('cuts')->latest('id')->get(),
             'trials' => TrialCampaign::where('seller_id', $seller->id)->with(['product', 'applications.user'])->latest('id')->get(),
+            'offers' => $seller->offers()->with('product')->latest('id')->get(),
+            'bundles' => $seller->bundles()->with('products')->latest('id')->get(),
         ]);
     }
 

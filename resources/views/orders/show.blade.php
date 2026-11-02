@@ -111,11 +111,13 @@
                 @elseif ($rider['rating'])
                     <p class="mt-2 text-sm">You gave the rider {{ str_repeat('★', $rider['rating']) }}. Thank you!</p>
                 @endif
-                @if ($rider['stage'] === \App\Models\DeliveryJob::PICKED_UP)
+                @if (in_array($rider['stage'], [\App\Models\DeliveryJob::ASSIGNED, \App\Models\DeliveryJob::PICKED_UP], true))
                     {{-- Live: where the rider is, how far and how long. Refreshes every 20 seconds. --}}
                     <div class="mt-3" data-tracking data-url="{{ route('orders.tracking', $order) }}">
                         <p class="font-bold" data-tracking-text>
-                            @if ($rider['tracking'] && $rider['tracking']['km'] !== null)
+                            @if ($rider['tracking'] && $rider['tracking']['km'] !== null && $rider['tracking']['phase'] === 'to_shop')
+                                The rider is {{ $rider['tracking']['km'] }} km from the shop &middot; collects your order in about {{ $rider['tracking']['minutes'] }} min
+                            @elseif ($rider['tracking'] && $rider['tracking']['km'] !== null)
                                 About {{ $rider['tracking']['km'] }} km away &middot; about {{ $rider['tracking']['minutes'] }} min
                             @elseif ($rider['tracking'])
                                 The rider is on the way.
@@ -129,7 +131,7 @@
                     <p class="mt-2 text-xs text-stone-600">Give the rider the 4-digit code from our SMS only when you have your goods.</p>
                 @endif
             </div>
-            @if ($rider['stage'] === \App\Models\DeliveryJob::PICKED_UP)
+            @if (in_array($rider['stage'], [\App\Models\DeliveryJob::ASSIGNED, \App\Models\DeliveryJob::PICKED_UP], true))
                 @push('head')
                     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
                     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -143,7 +145,9 @@
 
                         const show = (t) => {
                             if (!t) { text.textContent = "Waiting for the rider's location…"; return; }
-                            text.textContent = t.km !== null ? `About ${t.km} km away · about ${t.minutes} min${t.to_station ? ' to ' + t.to_station : ''}` : 'The rider is on the way.';
+                            const toShop = t.phase === 'to_shop';
+                            text.textContent = t.km === null ? 'The rider is on the way.'
+                                : (toShop ? `The rider is ${t.km} km from the shop · collects your order in about ${t.minutes} min` : `About ${t.km} km away · about ${t.minutes} min${t.to_station ? ' to ' + t.to_station : ''}`);
                             updated.textContent = (t.live ? 'Live · updated ' : 'Last seen ') + new Date(t.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '. Distance and time are estimates.';
                             if (!window.L) return;
                             const r = [t.rider.lat, t.rider.lng];
@@ -151,7 +155,12 @@
                                 map = L.map(box.querySelector('[data-tracking-map]'), { zoomControl: false }).setView(r, 14);
                                 L.tileLayer(@json(config('services.maps.tiles')), { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
                                 riderMark = L.marker(r, { title: 'Rider' }).addTo(map).bindTooltip('🛵 Rider', { permanent: true });
-                                if (t.destination) homeMark = L.circleMarker([t.destination.lat, t.destination.lng], { radius: 8, color: '#15803d' }).addTo(map).bindTooltip(t.to_station ? '📦 Station' : '🏠 You');
+                            }
+                            const label = toShop ? '🏪 Shop' : (t.to_station ? '📦 Station' : '🏠 You');
+                            if (t.destination && (!homeMark || homeMark.label !== label)) {
+                                if (homeMark) homeMark.remove();
+                                homeMark = L.circleMarker([t.destination.lat, t.destination.lng], { radius: 8, color: toShop ? '#b45309' : '#15803d' }).addTo(map).bindTooltip(label);
+                                homeMark.label = label;
                             }
                             riderMark.setLatLng(r);
                             if (homeMark) map.fitBounds(L.latLngBounds([r, homeMark.getLatLng()]).pad(0.3)); else map.setView(r);
@@ -161,7 +170,7 @@
                             .then((res) => res.ok ? res.json() : null)
                             .then((json) => {
                                 if (!json) return;
-                                if (!json.rider_delivery || json.rider_delivery.stage !== 'picked_up') { location.reload(); return; } // delivered
+                                if (!json.rider_delivery || json.rider_delivery.stage !== @json($rider['stage'])) { location.reload(); return; } // collected or delivered
                                 show(json.rider_delivery.tracking);
                             });
 

@@ -24,6 +24,8 @@ class CartLineResource extends JsonResource
         $quantity = $this->resource['quantity'];
         $variant = $this->resource['variant'] ?? null;
         $unitPrice = $variant?->price !== null ? Money::from($variant->price) : $product->unitPriceFor($quantity);
+        $addons = $this->resource['addons'] ?? collect();
+        $unitPrice = Money::add($unitPrice, Money::sum($addons->pluck('price')));
 
         return [
             'id' => $this->resource['item']->id,
@@ -33,6 +35,7 @@ class CartLineResource extends JsonResource
             'is_wholesale_price' => $unitPrice !== (string) $product->price,
             'problem' => $this->resource['problem'],
             'variant' => $variant ? ['id' => $variant->id, 'name' => $variant->name] : null,
+            'addons' => $addons->map(fn ($a) => ['id' => $a->id, 'name' => $a->name, 'price' => (string) $a->price])->values(),
             'product' => new ProductResource($product),
         ];
     }

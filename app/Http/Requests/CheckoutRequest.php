@@ -38,6 +38,12 @@ class CheckoutRequest extends FormRequest
             'longitude' => ['nullable', 'numeric', 'required_with:latitude'],
             'deliver_at' => ['nullable', 'date'],
             'team' => ['nullable', 'string', 'max:16'],
+            // A shop's offer code, and a tip for the rider per shop (seller id => Le).
+            'promo_code' => ['nullable', 'string', 'max:20'],
+            'tips' => ['nullable', 'array'],
+            'tips.*' => ['nullable', 'numeric', 'min:0', 'max:1000'],
+            'addons' => ['nullable', 'array', 'max:20'],
+            'addons.*' => ['integer'],
             'district' => ['nullable', Rule::in(config('wibuy.districts'))],
             'address' => ['nullable', 'string', 'max:200'],
             'note' => ['nullable', 'string', 'max:200'],

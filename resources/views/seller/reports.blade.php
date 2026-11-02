@@ -65,6 +65,53 @@
         </section>
 
         <section>
+            <h2 class="mb-2 text-lg font-extrabold">⏳ Will run out soon</h2>
+            <div class="card divide-y divide-stone-100">
+                @forelse ($report['forecast'] as $row)
+                    <a href="{{ route('seller.products.edit', $row['slug']) }}" class="flex items-center justify-between gap-3 p-3 text-sm hover:bg-brand-50">
+                        <span>{{ $row['title'] }} <span class="text-stone-500">&middot; sells about {{ $row['per_day'] }} a day</span></span>
+                        <span class="badge {{ $row['days_left'] <= 3 ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800' }}">{{ $row['days_left'] < 1 ? 'Out today' : 'about '.$row['days_left'].' day(s) left' }}</span>
+                    </a>
+                @empty
+                    <p class="p-4 text-sm text-stone-500">Nothing runs out in the next 2 weeks at the current pace.</p>
+                @endforelse
+            </div>
+        </section>
+
+        <section>
+            <h2 class="mb-2 text-lg font-extrabold">👀 Looked at → in cart → bought</h2>
+            <div class="card overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead><tr class="text-left"><th class="th">Product</th><th class="th text-right">Viewers</th><th class="th text-right">Carts</th><th class="th text-right">Orders</th><th class="th text-right">Bought / viewers</th></tr></thead>
+                    <tbody>
+                        @forelse ($report['funnel'] as $row)
+                            <tr><td class="td">{{ $row['title'] }}</td><td class="td text-right">{{ $row['views'] }}</td><td class="td text-right">{{ $row['carts'] }}</td><td class="td text-right">{{ $row['orders'] }}</td><td class="td text-right">{{ $row['conversion'] === null ? '—' : $row['conversion'].'%' }}</td></tr>
+                        @empty
+                            <tr><td class="td" colspan="5">No visits yet in this period.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+            <p class="mt-1 text-xs text-stone-500">Viewers are logged-in shoppers who opened the product. Many viewers but few orders? Check the price, photos and description.</p>
+        </section>
+
+        <section>
+            <h2 class="mb-2 text-lg font-extrabold">🕐 When buyers order</h2>
+            @php($topHour = max(1, max($report['hours'])))
+            <div class="card p-4">
+                <div class="flex h-32 items-end gap-0.5" role="img" aria-label="Orders per hour of the day">
+                    @foreach ($report['hours'] as $hour => $count)
+                        <div class="flex-1 rounded-t {{ $count === max($report['hours']) && $count > 0 ? 'bg-brand-700' : 'bg-brand-300' }}" style="height: {{ max(2, round($count / $topHour * 100)) }}%" title="{{ sprintf('%02d:00', $hour) }}: {{ $count }} order(s)"></div>
+                    @endforeach
+                </div>
+                <div class="mt-1 flex justify-between text-xs text-stone-500"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>23:00</span></div>
+                @if (max($report['hours']) > 0)
+                    <p class="mt-2 text-sm">Most orders come around <strong>{{ sprintf('%02d:00', array_search(max($report['hours']), $report['hours'])) }}</strong>: a good time for offers and live shows.</p>
+                @endif
+            </div>
+        </section>
+
+        <section>
             <h2 class="mb-2 text-lg font-extrabold">Running low</h2>
             <div class="card divide-y divide-stone-100">
                 @forelse ($report['low_stock'] as $product)

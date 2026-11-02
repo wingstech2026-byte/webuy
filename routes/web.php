@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin;
 use App\Http\Controllers\AgentInspectionController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\BrowseController;
+use App\Http\Controllers\BundleController;
 use App\Http\Controllers\BusinessAccountController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\ChatController;
@@ -13,10 +14,13 @@ use App\Http\Controllers\CompareController;
 use App\Http\Controllers\DisputeController;
 use App\Http\Controllers\FakePaymentController;
 use App\Http\Controllers\FarmPageController;
+use App\Http\Controllers\FollowController;
 use App\Http\Controllers\GroupBuyPageController;
 use App\Http\Controllers\GroupPageController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\InstantController;
+use App\Http\Controllers\InviteController;
+use App\Http\Controllers\LiveController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PhotoSearchController;
 use App\Http\Controllers\PriceCutPageController;
@@ -28,6 +32,7 @@ use App\Http\Controllers\Seller;
 use App\Http\Controllers\SellerApplicationController;
 use App\Http\Controllers\ShareLinkController;
 use App\Http\Controllers\ShopController;
+use App\Http\Controllers\SmsWebhookController;
 use App\Http\Controllers\StationController;
 use App\Http\Controllers\TeamOrderController;
 use App\Http\Controllers\TrialReviewController;
@@ -96,6 +101,10 @@ Route::get('/group-buys', [GroupBuyPageController::class, 'index'])->name('group
 // Instant food delivery near you, and office team orders (anyone with the link can see it)
 Route::get('/instant', [InstantController::class, 'index'])->middleware('throttle:60,1')->name('instant.index');
 Route::get('/team/{teamOrder:token}', [TeamOrderController::class, 'show'])->name('team.show');
+// Live selling: watch, comment and buy
+Route::get('/live', [LiveController::class, 'index'])->name('live.index');
+Route::get('/live/{liveSession}', [LiveController::class, 'show'])->name('live.show');
+Route::get('/live/{liveSession}/feed', [LiveController::class, 'feed'])->middleware('throttle:120,1')->name('live.feed');
 Route::get('/g/{group:token}', [GroupPageController::class, 'show'])->name('groups.show');
 Route::get('/get-app', [ShareLinkController::class, 'getApp'])->middleware('throttle:30,1')->name('app.get');
 Route::get('/cut/{priceCut:token}', [PriceCutPageController::class, 'show'])->name('price-cuts.show');
@@ -108,6 +117,9 @@ Route::post('/webhooks/pawapay', [WebhookController::class, 'pawapay'])
     ->middleware('throttle:webhook')->name('webhooks.pawapay');
 Route::get('/webhooks/whatsapp', [WhatsAppWebhookController::class, 'verify'])->middleware('throttle:webhook')->name('webhooks.whatsapp.verify');
 Route::post('/webhooks/whatsapp', [WhatsAppWebhookController::class, 'receive'])->middleware('throttle:webhook')->name('webhooks.whatsapp');
+// Ordering by SMS / USSD (from the SMS gateway, with its token)
+Route::post('/webhooks/sms', [SmsWebhookController::class, 'sms'])->middleware('throttle:webhook')->name('webhooks.sms');
+Route::post('/webhooks/ussd', [SmsWebhookController::class, 'ussd'])->middleware('throttle:webhook')->name('webhooks.ussd');
 
 // ---- Phone + SMS code login ------------------------------------------------------
 Route::middleware('guest')->group(function () {
@@ -139,6 +151,11 @@ Route::middleware('auth')->group(function () {
     Route::post('/account/details', [AccountDetailsController::class, 'update'])->middleware('throttle:20,1')->name('account.details.update');
     Route::post('/orders/{order}/confirm', [OrderController::class, 'confirm'])->name('orders.confirm');
     Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel'])->middleware('throttle:10,1')->name('orders.cancel');
+    Route::post('/live/{liveSession}/comments', [LiveController::class, 'comment'])->middleware('throttle:20,1')->name('live.comment');
+    Route::post('/shop/{seller:slug}/follow', [FollowController::class, 'toggle'])->middleware('throttle:30,1')->name('shops.follow');
+    Route::get('/following', [FollowController::class, 'index'])->name('following.index');
+    Route::get('/invite', [InviteController::class, 'show'])->name('invite.show');
+    Route::post('/bundles/{bundle}/cart', [BundleController::class, 'addToCart'])->middleware('throttle:cart')->name('bundles.cart');
     Route::post('/team', [TeamOrderController::class, 'store'])->middleware('throttle:10,1')->name('team.store');
     Route::post('/team/{teamOrder:token}/close', [TeamOrderController::class, 'close'])->name('team.close');
     Route::post('/rider/available', [RiderController::class, 'available'])->middleware('throttle:20,1')->name('rider.available');
@@ -249,6 +266,14 @@ Route::middleware(['auth', 'seller'])->prefix('seller')->name('seller.')->group(
 
     // Promotions: "cut the price" products and free trials
     Route::get('/promotions', [Seller\PromotionController::class, 'index'])->name('promotions');
+    Route::get('/live', [Seller\LiveController::class, 'index'])->name('live.index');
+    Route::post('/live', [Seller\LiveController::class, 'store'])->middleware('throttle:10,1')->name('live.store');
+    Route::post('/live/{liveSession}/{action}', [Seller\LiveController::class, 'act'])->whereIn('action', ['start', 'pin', 'end'])->name('live.act');
+    Route::post('/promotions/offers', [Seller\OfferController::class, 'store'])->name('offers.store');
+    Route::post('/promotions/offers/{offer}/toggle', [Seller\OfferController::class, 'toggle'])->name('offers.toggle');
+    Route::post('/promotions/bundles', [Seller\OfferController::class, 'storeBundle'])->name('bundles.store');
+    Route::post('/promotions/bundles/{bundle}/toggle', [Seller\OfferController::class, 'toggleBundle'])->name('bundles.toggle');
+    Route::put('/products/{product}/addons', [Seller\OfferController::class, 'addons'])->name('products.addons');
     Route::post('/promotions/price-cuts', [Seller\PromotionController::class, 'storeCut'])->name('promotions.cuts.store');
     Route::post('/promotions/price-cuts/{priceCutCampaign}/toggle', [Seller\PromotionController::class, 'toggleCut'])->name('promotions.cuts.toggle');
     Route::post('/promotions/trials', [Seller\PromotionController::class, 'storeTrial'])->name('promotions.trials.store');

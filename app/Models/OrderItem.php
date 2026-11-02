@@ -39,6 +39,6 @@ class OrderItem extends Model
     /** "T-shirt (Red, XL)" when an option was chosen, else the title. */
     public function getDisplayTitleAttribute(): string
     {
-        return $this->variant_name ? "{$this->title} ({$this->variant_name})" : $this->title;
+        return ($this->variant_name ? "{$this->title} ({$this->variant_name})" : $this->title).($this->addons ? " + {$this->addons}" : '');
     }
 }

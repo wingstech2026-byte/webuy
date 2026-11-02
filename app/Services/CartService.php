@@ -18,7 +18,8 @@ class CartService
     }
 
     /** @throws MarketplaceException */
-    public function add(User $user, Product $product, int $quantity, ?int $variantId = null): CartItem
+    /** @param list<int> $addonIds extras for a dish (extra meat...) */
+    public function add(User $user, Product $product, int $quantity, ?int $variantId = null, array $addonIds = []): CartItem
     {
         $product->loadMissing('seller', 'variants');
 
@@ -35,7 +36,8 @@ class CartService
         }
 
         $variant = $this->variantFor($product, $variantId);
-        $item = CartItem::firstOrNew(['cart_id' => $this->cart($user)->id, 'product_id' => $product->id, 'variant_id' => $variant?->id]);
+        $addonKey = $this->addonKey($product, $addonIds);
+        $item = CartItem::firstOrNew(['cart_id' => $this->cart($user)->id, 'product_id' => $product->id, 'variant_id' => $variant?->id, 'addon_key' => $addonKey]);
         $total = ($item->exists ? $item->quantity : 0) + $quantity;
 
         $this->assertQuantity($product, $total, $variant);
@@ -74,6 +76,22 @@ class CartService
         CartItem::where('cart_id', $this->cart($user)->id)->whereIn('product_id', collect($productIds))->delete();
     }
 
+    /**
+     * The chosen add-ons as a sorted key ("3,7"); every one must be an active extra of this product.
+     *
+     * @throws MarketplaceException
+     */
+    public function addonKey(Product $product, array $addonIds): string
+    {
+        $ids = collect($addonIds)->map(fn ($id) => (int) $id)->filter()->unique()->sort()->values();
+
+        if ($ids->isNotEmpty() && $product->addons()->whereIn('id', $ids)->count() !== $ids->count()) {
+            throw new MarketplaceException('Choose extras from the list.');
+        }
+
+        return $ids->implode(',');
+    }
+
     /** Number of units in the cart, for the header badge. */
     public function count(User $user): int
     {
@@ -88,15 +106,21 @@ class CartService
     public function lines(User $user): Collection
     {
         return CartItem::where('cart_id', $this->cart($user)->id)
-            ->with(['product.seller.deliveryAreas', 'product.seller.logo', 'product.tiers', 'product.images', 'product.variants', 'variant'])
+            ->with(['product.seller.deliveryAreas', 'product.seller.logo', 'product.tiers', 'product.images', 'product.variants', 'product.addons', 'variant'])
             ->orderBy('id')->get()
-            ->map(fn (CartItem $item) => [
-                'item' => $item,
-                'product' => $item->product,
-                'variant' => $item->variant,
-                'quantity' => $item->quantity,
-                'problem' => $this->problemFor($item->product, $item->quantity, $item->variant),
-            ]);
+            ->map(function (CartItem $item) {
+                $addons = $item->product->addons->whereIn('id', $item->addonIds())->values();
+
+                return [
+                    'item' => $item,
+                    'product' => $item->product,
+                    'variant' => $item->variant,
+                    'addons' => $addons,
+                    'quantity' => $item->quantity,
+                    'problem' => $addons->count() !== count($item->addonIds()) ? 'An extra you chose is no longer offered: remove this and add it again'
+                        : $this->problemFor($item->product, $item->quantity, $item->variant),
+                ];
+            });
     }
 
     public function problemFor(Product $product, int $quantity, ?ProductVariant $variant = null): ?string

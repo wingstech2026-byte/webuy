@@ -14,7 +14,9 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderMilestone;
 use App\Models\Product;
+use App\Models\ProductAddon;
 use App\Models\ProductVariant;
+use App\Models\ShopOffer;
 use App\Models\Station;
 use App\Models\TeamOrder;
 use App\Models\User;
@@ -50,8 +52,14 @@ class CheckoutService
      * @param  ?Coupon  $coupon  a coupon the buyer chose; when it does not apply, coupon_error says why
      * @return array{groups: array<int, array<string, mixed>>, items_total: string, delivery_total: string, grand_total: string, discount_total: string, amount_due: string, coupon: ?Coupon, coupon_discount: string, coupon_error: ?string, pass_savings: string, is_member: bool}
      */
-    public function summarize(Collection $lines, ?string $district, array $methods = [], ?User $buyer = null, ?Coupon $coupon = null, string $channel = 'web', ?array $point = null, ?int $stationId = null, ?TeamOrder $team = null): array
+    /**
+     * @param  array{promo_code?: ?string, tips?: array<int, string|int|float>}  $extras  a shop's offer code; tips for the rider per shop
+     */
+    public function summarize(Collection $lines, ?string $district, array $methods = [], ?User $buyer = null, ?Coupon $coupon = null, string $channel = 'web', ?array $point = null, ?int $stationId = null, ?TeamOrder $team = null, array $extras = []): array
     {
+        $promoCode = filled($extras['promo_code'] ?? null) ? (string) $extras['promo_code'] : null;
+        $codeApplied = false;
+        $codeError = null;
         $geo = app(GeoService::class);
         $stations = app(StationService::class);
         $collectStation = $stationId ? Station::active()->find($stationId) : null;
@@ -70,8 +78,12 @@ class CheckoutService
                 $unit = isset($line['unit_price'])
                     ? Money::from($line['unit_price'])
                     : $line['product']->unitPriceForBuyer($line['quantity'], $isMember, $isBusiness, $line['variant'] ?? null);
+                // Add-ons (extra meat...) are part of the price of each dish.
+                $addons = $line['addons'] ?? collect();
+                $unit = Money::add($unit, Money::sum($addons->pluck('price')));
 
                 return [
+                    'addons' => $addons,
                     'product' => $line['product'],
                     'variant' => $line['variant'] ?? null,
                     'quantity' => $line['quantity'],
@@ -82,6 +94,10 @@ class CheckoutService
             })->values();
 
             $subtotal = Money::sum($items->pluck('line_total'));
+            // The shop's own offers (bundles, buy N get 1 free, spend X or a code): paid by the shop.
+            $offers = app(ShopOfferService::class)->apply($seller, $items, $subtotal, $promoCode, $buyer);
+            $codeApplied = $codeApplied || $offers['code_applied'];
+            $codeError ??= $offers['code_error'];
             // Delivery radius from the seller's locations when we know the point, else the district zones.
             $quote = $geo->deliveryQuote($seller, $district, $lat, $lng, $subtotal);
             $districtFee = $quote['can_deliver'] ? $quote['fee'] : null;
@@ -114,6 +130,9 @@ class CheckoutService
             }
 
             // WiBuy Pass: WiBuy pays the delivery fee of eligible shop orders (the seller still gets it). Not station fees.
+            // A tip for the rider (delivery only): all of it goes to the WiBuy rider, or to the shop when it delivers itself.
+            $tip = $method === DeliveryMethod::Delivery ? Money::from(min(1000, max(0, (float) ($extras['tips'][$sellerId] ?? 0)))) : '0.00';
+
             $passDiscount = $isMember && $method === DeliveryMethod::Delivery && Money::gt($fee, 0) && Money::gte($subtotal, $freeDeliveryFrom) ? $fee : '0.00';
 
             $groups[$sellerId] = [
@@ -135,7 +154,11 @@ class CheckoutService
                 'delivery_fee' => $fee,
                 'shop_pays_delivery' => $shopPaysDelivery,
                 'free_delivery_from' => $seller->free_delivery_from,
-                'total' => Money::add($subtotal, $fee),
+                'total' => Money::add(Money::add(Money::sub($subtotal, $offers['discount']), $fee), $tip),
+                'shop_discount' => $offers['discount'],
+                'offer_labels' => $offers['labels'],
+                'shop_offer_id' => $offers['offer_id'],
+                'rider_tip' => $tip,
                 'pass_discount' => $passDiscount,
                 'discount' => $passDiscount,
             ];
@@ -149,7 +172,9 @@ class CheckoutService
 
         $itemsTotal = Money::sum(array_column($groups, 'subtotal'));
         $deliveryTotal = Money::sum(array_column($groups, 'delivery_fee'));
-        $grandTotal = Money::add($itemsTotal, $deliveryTotal);
+        $shopDiscountTotal = Money::sum(array_column($groups, 'shop_discount'));
+        $tipsTotal = Money::sum(array_column($groups, 'rider_tip'));
+        $grandTotal = Money::sum(array_column($groups, 'total')); // items - shop offers + delivery + tips
         $discountTotal = Money::sum(array_column($groups, 'discount'));
 
         return [
@@ -164,6 +189,9 @@ class CheckoutService
             'coupon_error' => $couponError,
             'pass_savings' => Money::sum(array_column($groups, 'pass_discount')),
             'team' => $team,
+            'shop_discount_total' => $shopDiscountTotal,
+            'tips_total' => $tipsTotal,
+            'promo_error' => $promoCode && ! $codeApplied ? ($codeError ?? 'This code does not work for the shops in your order.') : null,
             'is_member' => $isMember,
         ];
     }
@@ -241,12 +269,14 @@ class CheckoutService
             throw new MarketplaceException('Please add your full name and where you live (district and town) under My details before buying.');
         }
 
-        // One line per product and option (variant): "Shirt, Red XL" and "Shirt, Blue M" are separate lines.
+        // One line per product, option (variant) and add-ons: "Shirt, Red XL" and "Shirt, Blue M" are separate lines.
+        $addonKey = fn ($line) => collect($line['addon_ids'] ?? [])->map(fn ($id) => (int) $id)->unique()->sort()->implode(',');
         $wanted = collect($lines)
-            ->groupBy(fn ($line) => $line['product_id'].':'.($line['variant_id'] ?? ''))
+            ->groupBy(fn ($line) => $line['product_id'].':'.($line['variant_id'] ?? '').':'.$addonKey($line))
             ->map(fn ($rows) => [
                 'product_id' => (int) $rows->first()['product_id'],
                 'variant_id' => isset($rows->first()['variant_id']) ? (int) $rows->first()['variant_id'] : null,
+                'addon_ids' => $addonKey($rows->first()) === '' ? [] : array_map('intval', explode(',', $addonKey($rows->first()))),
                 'quantity' => (int) $rows->sum('quantity'),
             ])->values();
         // Lines with a locked price (an accepted quote or a sample), keyed by product.
@@ -279,7 +309,7 @@ class CheckoutService
 
             $lines = collect();
 
-            foreach ($wanted as ['product_id' => $productId, 'variant_id' => $variantId, 'quantity' => $quantity]) {
+            foreach ($wanted as ['product_id' => $productId, 'variant_id' => $variantId, 'addon_ids' => $addonIds, 'quantity' => $quantity]) {
                 $product = $products->get($productId);
 
                 if (! $product || ! $product->isListed()) {
@@ -331,9 +361,16 @@ class CheckoutService
                         : "{$product->title} ({$variant->name}) is out of stock.");
                 }
 
+                $addons = ProductAddon::where('product_id', $product->id)->where('is_active', true)->whereIn('id', $addonIds)->get();
+
+                if ($addons->count() !== count($addonIds)) {
+                    throw new MarketplaceException("An extra for {$product->title} is no longer available. Please choose again.");
+                }
+
                 $lines->push(array_filter([
                     'product' => $product,
                     'variant' => $variant,
+                    'addons' => $addons->isEmpty() ? null : $addons,
                     'quantity' => $quantity,
                     'unit_price' => $locked[$productId]['unit_price'] ?? null,
                     'is_sample' => $isSample ?: null,
@@ -347,7 +384,12 @@ class CheckoutService
             }
 
             $point = isset($details['latitude'], $details['longitude']) ? ['lat' => $details['latitude'], 'lng' => $details['longitude']] : null;
-            $summary = $this->summarize($lines, $details['district'] ?? null, $methods, $buyer, $coupon, $channel, $point, isset($details['station_id']) ? (int) $details['station_id'] : null, $team);
+            $summary = $this->summarize($lines, $details['district'] ?? null, $methods, $buyer, $coupon, $channel, $point, isset($details['station_id']) ? (int) $details['station_id'] : null, $team,
+                ['promo_code' => $options['promo_code'] ?? null, 'tips' => $options['tips'] ?? []]);
+
+            if ($summary['promo_error']) {
+                throw new MarketplaceException($summary['promo_error']);
+            }
 
             if ($summary['coupon_error']) {
                 throw new MarketplaceException($summary['coupon_error']);
@@ -410,7 +452,12 @@ class CheckoutService
                     'delivery_fee' => $group['delivery_fee'],
                     'shop_paid_delivery' => $group['shop_pays_delivery'],
                     'commission_percent' => $rate,
-                    'commission' => Money::percentOf($group['subtotal'], $rate),
+                    // Commission on what the buyer pays for the goods (after the shop's own offers).
+                    'commission' => Money::percentOf(Money::sub($group['subtotal'], $group['shop_discount']), $rate),
+                    'shop_discount' => $group['shop_discount'],
+                    'offer_labels' => $group['offer_labels'] ? mb_substr(implode(' · ', $group['offer_labels']), 0, 300) : null,
+                    'shop_offer_id' => $group['shop_offer_id'],
+                    'rider_tip' => $group['rider_tip'],
                     'total' => $group['total'],
                     'discount' => $group['discount'],
                     'rfq_quote_id' => $options['rfq_quote_id'] ?? null,
@@ -450,6 +497,7 @@ class CheckoutService
                         'line_total' => $item['line_total'],
                         'is_sample' => $item['is_sample'],
                         'genuine_guarantee' => (bool) $product->genuine_guarantee, // what was promised when it was bought
+                        'addons' => $item['addons']->isEmpty() ? null : mb_substr($item['addons']->pluck('name')->implode(', '), 0, 300),
                         'thumb_path' => $product->cover?->thumb_path,
                     ]);
 
@@ -560,6 +608,10 @@ class CheckoutService
 
             if ($order->is_instant) {
                 app(InstantService::class)->onPaid($order);
+            }
+
+            if ($order->shop_offer_id) {
+                ShopOffer::whereKey($order->shop_offer_id)->increment('uses');
             }
             $this->flashDeals->recordSales($order);
         }

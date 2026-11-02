@@ -33,10 +33,16 @@
             <thead><tr><th>Item</th><th class="r">Qty</th><th class="r">Price</th><th class="r">Total</th></tr></thead>
             <tbody>
                 @foreach ($order->items as $item)
-                    <tr><td>{{ $item->title }}</td><td class="r">{{ $item->quantity }} {{ $item->unit }}</td><td class="r">{{ money($item->unit_price) }}</td><td class="r">{{ money($item->line_total) }}</td></tr>
+                    <tr><td>{{ $item->display_title }}</td><td class="r">{{ $item->quantity }} {{ $item->unit }}</td><td class="r">{{ money($item->unit_price) }}</td><td class="r">{{ money($item->line_total) }}</td></tr>
                 @endforeach
                 <tr><td colspan="3">Items</td><td class="r">{{ money($order->subtotal) }}</td></tr>
+                @if ((float) $order->shop_discount > 0)
+                    <tr><td colspan="3">Shop offer{{ $order->offer_labels ? ': '.$order->offer_labels : '' }}</td><td class="r">&minus; {{ money($order->shop_discount) }}</td></tr>
+                @endif
                 <tr><td colspan="3">Delivery</td><td class="r">{{ money($order->delivery_fee) }}</td></tr>
+                @if ((float) $order->rider_tip > 0)
+                    <tr><td colspan="3">Tip for the rider</td><td class="r">{{ money($order->rider_tip) }}</td></tr>
+                @endif
                 @if ((float) $order->discount > 0)
                     <tr><td colspan="3">Discount</td><td class="r">&minus; {{ money($order->discount) }}</td></tr>
                 @endif

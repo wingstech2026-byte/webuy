@@ -120,6 +120,7 @@ class OrderService
             );
 
             $this->creditSamples($order);
+            app(ReferralService::class)->onOrderCompleted($order); // an invited friend's first order: both rewarded
         });
     }
 

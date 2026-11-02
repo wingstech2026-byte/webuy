@@ -59,6 +59,12 @@ class User extends Authenticatable
         return $this->hasOne(Seller::class);
     }
 
+    /** Shops this person follows (their news shows in "Following"). */
+    public function followedShops(): BelongsToMany
+    {
+        return $this->belongsToMany(Seller::class, 'shop_follows')->withTimestamps();
+    }
+
     /** The shop this person helps in (added by its owner). */
     public function staffShops(): BelongsToMany
     {

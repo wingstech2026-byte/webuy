@@ -13,7 +13,8 @@ enum LedgerType: string
     case LateShipping = 'late_shipping';       // - shipped later than promised: the buyer got a coupon
     case GenuineGuarantee = 'genuine_guarantee'; // - goods promised genuine were fake: the buyer got compensation
     case StationFee = 'station_fee';           // + a partner station's share for a parcel it handled
-    case Sponsored = 'sponsored';              // - the seller paid to sponsor a product
+    case Sponsored = 'sponsored';
+    case RiderTip = 'rider_tip';               // + a tip the buyer gave the WiBuy rider who delivered              // - the seller paid to sponsor a product
 
     public function label(): string
     {

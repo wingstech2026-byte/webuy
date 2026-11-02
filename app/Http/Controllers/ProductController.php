@@ -7,6 +7,7 @@ use App\Models\GroupBuyCampaign;
 use App\Models\Product;
 use App\Models\WishlistItem;
 use App\Services\RecommendationService;
+use App\Services\ShopOfferService;
 use App\Support\BrowsingHistory;
 use App\Support\Money;
 use Illuminate\Http\Request;
@@ -60,6 +61,8 @@ class ProductController extends Controller
             'recent' => $history->recent($product, 8),
             'reviews' => $product->reviews()->with('buyer', 'images')->limit(10)->get(),
             'alsoBought' => $this->recommendations->alsoBought($product, 4),
+            // The shop's own offers that apply to this product, and bundles with it.
+            'shopOffers' => app(ShopOfferService::class)->forProduct($product),
             'questions' => $product->questions()->public()->latest('answered_at')->limit(10)->get(),
             'more' => $product->seller->products()->listed()->where('products.id', '!=', $product->id)
                 ->with('images', 'tiers', 'seller')->latest('id')->limit(4)->get(),

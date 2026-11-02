@@ -55,6 +55,9 @@ class CheckoutController extends Controller
             'lng' => ['nullable', 'numeric', 'required_with:lat'],
             'station_id' => ['nullable', 'integer'],
             'team' => ['nullable', 'string', 'max:16'],
+            'promo_code' => ['nullable', 'string', 'max:20'],
+            'tips' => ['nullable', 'array'],
+            'tips.*' => ['nullable', 'numeric', 'min:0', 'max:1000'],
         ]);
 
         [$lines, $source] = $this->lines->resolve($request->user(), $data['product'] ?? null, $data['qty'] ?? null, (bool) ($data['sample'] ?? false), $data['variant'] ?? null);
@@ -71,7 +74,8 @@ class CheckoutController extends Controller
             [$district, $point] = [$team->district, ['lat' => (float) $team->latitude, 'lng' => (float) $team->longitude]];
         }
 
-        $summary = $this->checkouts->summarize($lines, $district, $data['methods'] ?? [], $user, $coupon, 'app', $point, $data['station_id'] ?? null, $team);
+        $summary = $this->checkouts->summarize($lines, $district, $data['methods'] ?? [], $user, $coupon, 'app', $point, $data['station_id'] ?? null, $team,
+            ['promo_code' => $data['promo_code'] ?? null, 'tips' => $data['tips'] ?? []]);
         $stations = app(StationService::class)->stationsFor($district, $point['lat'] ?? null, $point['lng'] ?? null);
 
         return response()->json([
@@ -108,7 +112,14 @@ class CheckoutController extends Controller
                 'is_instant' => (bool) $group['seller']->is_instant,
                 'eta_minutes' => $group['seller']->is_instant && $group['distance_km'] !== null ? $group['seller']->instantEtaMinutes((float) $group['distance_km']) : null,
                 'is_open' => $group['seller']->isOpenAt(),
+                // The shop's own offers (paid by the shop) and the tip for the rider.
+                'shop_discount' => $group['shop_discount'],
+                'offer_labels' => $group['offer_labels'],
+                'rider_tip' => $group['rider_tip'],
             ])->values(),
+            'shop_discount_total' => $summary['shop_discount_total'],
+            'tips_total' => $summary['tips_total'],
+            'promo_error' => $summary['promo_error'],
             'team' => $team ? ['token' => $team->token, 'title' => $team->title, 'place' => $team->place, 'is_open' => $team->isOpen(), 'organiser_pays_delivery' => $team->leader_id !== $user->id] : null,
             // Stations the buyer can collect at, nearest first.
             'stations' => $stations->map(fn ($s): array => ['id' => $s->id, 'name' => $s->name, 'address' => $s->address, 'district' => $s->district, 'opening_hours' => $s->opening_hours])->values(),
@@ -144,6 +155,7 @@ class CheckoutController extends Controller
             $lines->map(fn (array $line): array => array_filter([
                 'product_id' => $line['product']->id,
                 'variant_id' => $line['variant']?->id,
+                'addon_ids' => isset($line['addons']) ? $line['addons']->pluck('id')->all() : null,
                 'quantity' => $line['quantity'],
                 'unit_price' => $line['unit_price'] ?? null,
                 'is_sample' => $line['is_sample'] ?? null,
@@ -166,7 +178,7 @@ class CheckoutController extends Controller
             $data['payer_phone'],
             isset($data['coupon_id']) ? (int) $data['coupon_id'] : null,
             'app',
-            ['payment_plan' => $data['payment_plan'] ?? 'full'],
+            ['payment_plan' => $data['payment_plan'] ?? 'full', 'promo_code' => $data['promo_code'] ?? null, 'tips' => $data['tips'] ?? []],
         );
 
         if ($source === 'cart') {

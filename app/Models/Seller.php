@@ -103,6 +103,22 @@ class Seller extends Model
         return 'slug';
     }
 
+    /** People who follow this shop. */
+    public function followers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'shop_follows')->withTimestamps();
+    }
+
+    public function offers(): HasMany
+    {
+        return $this->hasMany(ShopOffer::class);
+    }
+
+    public function bundles(): HasMany
+    {
+        return $this->hasMany(Bundle::class);
+    }
+
     /** Helpers who manage orders and products (not money or shop settings). */
     public function staff(): BelongsToMany
     {

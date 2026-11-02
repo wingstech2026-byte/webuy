@@ -245,6 +245,24 @@
         </div>
     </form>
 
+    @if ($item->exists)
+        {{-- Extras for a dish (extra meat, extra pepper) --}}
+        @php($addonRows = array_pad($item->addons->map(fn ($a) => ['id' => $a->id, 'name' => $a->name, 'price' => $a->price])->all(), max(3, $item->addons->count() + 2), ['id' => null, 'name' => '', 'price' => '']))
+        <form method="POST" action="{{ route('seller.products.addons', $item) }}" class="card mt-6 space-y-2 p-4">
+            @csrf @method('PUT')
+            <h2 class="font-bold">🍗 Extras (optional)</h2>
+            <p class="text-sm text-stone-600">For food: things buyers can add to each dish, like "Extra meat" for Le 15. Leave a name empty to remove it.</p>
+            @foreach ($addonRows as $i => $row)
+                <div class="grid grid-cols-[1fr_8rem] gap-2">
+                    <input type="hidden" name="addons[{{ $i }}][id]" value="{{ $row['id'] }}">
+                    <input name="addons[{{ $i }}][name]" maxlength="60" class="input" value="{{ $row['name'] }}" placeholder="{{ $i === 0 ? 'Extra meat' : '' }}" aria-label="Extra {{ $i + 1 }}">
+                    <input name="addons[{{ $i }}][price]" type="number" min="0" step="0.01" class="input" value="{{ $row['price'] }}" placeholder="Le" aria-label="Price of extra {{ $i + 1 }}">
+                </div>
+            @endforeach
+            <button class="btn btn-outline btn-sm">Save extras</button>
+        </form>
+    @endif
+
     @if ($item->exists && $item->isListed())
         <form id="promote-product" method="POST" action="{{ route('seller.products.promote', $item) }}" onsubmit="return confirm('Pay from your balance to sponsor this product?')">@csrf</form>
     @endif

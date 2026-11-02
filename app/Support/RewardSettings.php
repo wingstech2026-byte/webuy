@@ -23,6 +23,9 @@ final class RewardSettings
         'welcome_bonus_min_spend' => ['Welcome pack', 'Minimum order for the bonus coupon (Le)', 'money', '100.00'],
         'welcome_coupon_days' => ['Welcome pack', 'Days the welcome coupons last', 'int', 30],
         'referral_points' => ['Welcome pack', 'WiBuy Points for each friend who signs up from your link', 'int', 100],
+        'referral_order_coupon' => ['Welcome pack', "Coupon (Le) for both you and your friend when the friend's first order arrives", 'money', '20.00'],
+        'referral_order_min_spend' => ['Welcome pack', 'Minimum order for that coupon (Le)', 'money', '100.00'],
+        'referral_order_points' => ['Welcome pack', "WiBuy Points for you when an invited friend's first order arrives", 'int', 200],
 
         'app_first_order_amount' => ['App install', 'First app order coupon (Le) shown on the website banner', 'money', '15.00'],
         'app_first_order_min_spend' => ['App install', 'Minimum order for the app coupon (Le)', 'money', '50.00'],

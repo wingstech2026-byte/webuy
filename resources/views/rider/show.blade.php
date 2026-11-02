@@ -59,9 +59,9 @@
             <p class="rounded-lg bg-brand-50 p-2 font-semibold text-brand-900">Delivered ✓ Thank you.</p>
         @endif
 
-        @if ($job['status'] === 'picked_up')
-            {{-- Live tracking: only while the parcel is with the rider; it stops when it is delivered. --}}
-            <p class="rounded-lg bg-amber-50 p-2 text-sm text-amber-900" data-share-status>📍 Keep this page open: your location is shared with the buyer while you carry this parcel. It stops when you deliver.</p>
+        @if (in_array($job['status'], ['assigned', 'picked_up'], true) && $job['is_mine'])
+            {{-- Live tracking: from taking the job until it is delivered (the buyer sees you come to the shop, then to them). --}}
+            <p class="rounded-lg bg-amber-50 p-2 text-sm text-amber-900" data-share-status>📍 Keep this page open: your location is shared with the buyer during this delivery. It stops when you deliver.</p>
             <script>
                 (() => {
                     const status = document.querySelector('[data-share-status]');

@@ -10,7 +10,7 @@ use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\Marketplace;
 use Tests\TestCase;
 
-/** The buyer follows the rider live while the parcel is on its way; nothing is kept after delivery. */
+/** The buyer follows the rider live from acceptance (to the shop, then to them); nothing is kept after delivery. */
 class RiderTrackingTest extends TestCase
 {
     use Marketplace;
@@ -43,8 +43,14 @@ class RiderTrackingTest extends TestCase
 
     public function test_the_buyer_sees_the_rider_live_and_gets_near_messages_once(): void
     {
-        // Not before the rider has the parcel.
-        $this->share(8.48, -13.23)->assertStatus(422)->assertJsonPath('message', 'Your location is only shared while you carry the parcel.');
+        // From taking the job: the buyer sees the rider riding to the shop first (no "km away" messages yet).
+        $this->job->forceFill(['pickup_latitude' => 8.4900, 'pickup_longitude' => -13.2300])->save();
+        $this->share(8.48, -13.23)->assertOk();
+        $this->actingAs($this->order->buyer)->getJson(route('orders.tracking', $this->order))
+            ->assertJsonPath('rider_delivery.tracking.phase', 'to_shop')
+            ->assertJsonPath('rider_delivery.tracking.destination.lat', 8.49);
+        $this->actingAs($this->order->buyer)->get(route('orders.show', $this->order))->assertSee('collects your order in about');
+        $this->assertSame(0, AppNotification::where('user_id', $this->order->buyer_id)->where('body', 'like', '%away%')->count());
 
         $this->actingAs($this->rider)->post(route('rider.jobs.act', [$this->job, 'picked-up']));
         $this->actingAs($this->rider)->get(route('rider.jobs.show', $this->job))->assertSee('your location is shared with the buyer');
@@ -55,6 +61,7 @@ class RiderTrackingTest extends TestCase
         $this->actingAs($buyer)->getJson(route('orders.tracking', $this->order))->assertOk()
             ->assertJsonPath('rider_delivery.tracking.rider.lat', 8.495)
             ->assertJsonPath('rider_delivery.tracking.live', true)
+            ->assertJsonPath('rider_delivery.tracking.phase', 'to_you')
             ->assertJsonPath('rider_delivery.tracking.destination.lat', 8.47);
         $this->assertSame(0, AppNotification::where('user_id', $buyer->id)->where('title', 'like', '🛵%')->count());
 

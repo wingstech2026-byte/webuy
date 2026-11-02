@@ -61,7 +61,12 @@ class CheckoutController extends Controller
         $district = $team?->district ?? $district;
 
         return view('checkout.show', [
-            'summary' => $this->checkouts->summarize($lines, $district, $methods, $user, $coupon, 'web', $point, $stationId, $team),
+            'summary' => $this->checkouts->summarize($lines, $district, $methods, $user, $coupon, 'web', $point, $stationId, $team, [
+                'promo_code' => $request->input('promo_code', old('promo_code')),
+                'tips' => (array) $request->input('tips', old('tips', [])),
+            ]),
+            'promoCode' => $request->input('promo_code', old('promo_code')),
+            'tips' => (array) $request->input('tips', old('tips', [])),
             'point' => $point,
             'team' => $team,
             'stations' => app(StationService::class)->stationsFor($district),
@@ -88,7 +93,7 @@ class CheckoutController extends Controller
 
             $checkout = $this->checkouts->place(
                 $user,
-                $lines->map(fn ($line) => ['product_id' => $line['product']->id, 'variant_id' => $line['variant']?->id, 'quantity' => $line['quantity']])->all(),
+                $lines->map(fn ($line) => ['product_id' => $line['product']->id, 'variant_id' => $line['variant']?->id, 'addon_ids' => ($line['addons'] ?? collect())->pluck('id')->all(), 'quantity' => $line['quantity']])->all(),
                 [
                     'name' => $data['recipient_name'] ?? $user->name,
                     'phone' => $data['recipient_phone'] ?? $user->phone,
@@ -105,6 +110,7 @@ class CheckoutController extends Controller
                 $data['payer_phone'],
                 isset($data['coupon_id']) ? (int) $data['coupon_id'] : null,
                 'web',
+                ['promo_code' => $data['promo_code'] ?? null, 'tips' => $data['tips'] ?? []],
             );
         } catch (MarketplaceException $e) {
             return back()->withInput()->withErrors(['general' => $e->getMessage()]);
@@ -173,6 +179,7 @@ class CheckoutController extends Controller
             $isBuyNow ? (int) $request->input('qty', 1) : null,
             false,
             $isBuyNow && $request->filled('variant') ? $request->integer('variant') : null,
+            $isBuyNow ? array_map('intval', (array) $request->input('addons', [])) : [],
         );
     }
 }

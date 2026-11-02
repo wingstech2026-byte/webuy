@@ -78,6 +78,7 @@
                 <div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-stone-600">
                     <x-stars :rating="$product->rating_avg" :count="$product->rating_count" />
                     <span>&middot; {{ $product->condition->label() }}</span>
+                    @foreach ($shopOffers['offers'] as $offer) <span class="badge bg-red-50 text-red-700">🏷 {{ $offer->label }}</span> @endforeach
                     @if ($product->seller->isOnHoliday()) <span class="badge bg-amber-100 text-amber-900">🏖 {{ $product->seller->holidayNotice() }}</span> @endif
                     @if ($product->seller->free_delivery_from && $product->seller->offers_delivery) <span class="badge bg-amber-100 text-amber-900">🚚 Free delivery from {{ money($product->seller->free_delivery_from) }}</span> @endif
                     @if ($product->genuine_guarantee) <span class="badge bg-brand-100 text-brand-800" title="If it is fake you get your money back plus compensation">✅ Genuine guarantee</span> @endif
@@ -151,6 +152,19 @@
                                 @error('variant') <p class="field-error">{{ $message }}</p> @enderror
                             </fieldset>
                         @endif
+                        @if (\App\Services\Sms\SmsOrdering::enabled() && config('services.sms_ordering.number') && ! $product->hasVariants() && $product->addons->isEmpty())
+                            <p class="text-xs text-stone-500">📱 No data? Text <strong>BUY {{ $product->id }} 1 ORANGE</strong> to {{ config('services.sms_ordering.number') }}@if (config('services.sms_ordering.ussd_code')) or dial {{ config('services.sms_ordering.ussd_code') }} and use code {{ $product->id }}@endif.</p>
+                        @endif
+                        @if ($product->addons->isNotEmpty())
+                            <fieldset>
+                                <legend class="label">Extras (optional, for each one)</legend>
+                                <div class="flex flex-wrap gap-2">
+                                    @foreach ($product->addons as $addon)
+                                        <label class="choice text-sm"><input type="checkbox" name="addons[]" value="{{ $addon->id }}" class="size-4 accent-brand-700" @checked(in_array($addon->id, (array) old('addons', [])))> {{ $addon->name }} +{{ money($addon->price) }}</label>
+                                    @endforeach
+                                </div>
+                            </fieldset>
+                        @endif
                         <div>
                             <label for="quantity" class="label">How many?</label>
                             <input id="quantity" name="quantity" type="number" inputmode="numeric" min="{{ $product->min_order_quantity }}" max="{{ $product->stock }}"
@@ -217,6 +231,25 @@
             @endif
         </div>
     </div>
+
+    @if ($shopOffers['bundles']->isNotEmpty())
+        <section class="mt-6">
+            <h2 class="mb-2 text-lg font-extrabold">🎁 Bundles: buy together and save</h2>
+            <div class="grid gap-3 sm:grid-cols-2">
+                @foreach ($shopOffers['bundles'] as $bundle)
+                    <form method="POST" action="{{ route('bundles.cart', $bundle) }}" class="card flex flex-wrap items-center justify-between gap-2 p-4">
+                        @csrf
+                        <div>
+                            <p class="font-bold">{{ $bundle->title }}</p>
+                            <p class="text-sm text-stone-600">{{ $bundle->products->map(fn ($p) => $p->pivot->quantity.' × '.$p->title)->implode(' + ') }}</p>
+                            <p><strong class="text-brand-700">{{ money($bundle->price) }}</strong> <span class="text-sm text-stone-500 line-through">{{ money($bundle->normalPrice()) }}</span></p>
+                        </div>
+                        <button class="btn btn-primary btn-sm">Add all to cart</button>
+                    </form>
+                @endforeach
+            </div>
+        </section>
+    @endif
 
     {{-- Questions and answers --}}
     <section class="mt-8" aria-labelledby="questions">

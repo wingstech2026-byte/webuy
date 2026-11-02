@@ -13,6 +13,12 @@
         @endif
         @if ($team) <input type="hidden" name="team" value="{{ $team->token }}"> @endif
         @if ($point && ! $team) <input type="hidden" name="latitude" value="{{ $point['lat'] }}"><input type="hidden" name="longitude" value="{{ $point['lng'] }}"> @endif
+        @foreach ((array) request('addons', []) as $addonId) <input type="hidden" name="addons[]" value="{{ (int) $addonId }}"> @endforeach
+        @foreach ($tips as $tipSeller => $tipAmount) <input type="hidden" name="tips[{{ (int) $tipSeller }}]" value="{{ (float) $tipAmount }}"> @endforeach
+        <div class="min-w-40">
+            <label for="promo-code" class="label">Shop offer code</label>
+            <input id="promo-code" name="promo_code" maxlength="20" class="input uppercase" value="{{ $promoCode }}" placeholder="FRIDAY10">
+        </div>
         <div class="min-w-56 flex-1">
             <label for="district-pick" class="label">Your district (for delivery fees)</label>
             <select id="district-pick" name="district" class="input">
@@ -45,6 +51,7 @@
         @endif
         <button class="btn btn-outline btn-sm">Update</button>
         @if ($summary['coupon_error']) <p class="field-error w-full">{{ $summary['coupon_error'] }}</p> @endif
+        @if ($summary['promo_error']) <p class="field-error w-full">{{ $summary['promo_error'] }}</p> @endif
     </form>
 
     <form method="POST" action="{{ route('checkout.store') }}" class="grid gap-6 lg:grid-cols-[1fr_22rem]" data-checkout data-recalc-url="{{ route('checkout.show') }}">
@@ -60,6 +67,8 @@
             <input type="hidden" name="qty" value="{{ $qty }}">
         @endif
 
+        @if ($promoCode) <input type="hidden" name="promo_code" value="{{ $promoCode }}"> @endif
+        @foreach ((array) request('addons', []) as $addonId) <input type="hidden" name="addons[]" value="{{ (int) $addonId }}"> @endforeach
         @php($hasInstant = collect($summary['groups'])->contains(fn ($g) => $g['seller']->is_instant && $g['method'] === \App\Enums\DeliveryMethod::Delivery))
         @if ($team) <input type="hidden" name="team" value="{{ $team->token }}"> @endif
         @if ($point && ! $team) <input type="hidden" name="latitude" value="{{ $point['lat'] }}"><input type="hidden" name="longitude" value="{{ $point['lng'] }}"> @endif
@@ -156,6 +165,19 @@
                     </fieldset>
                     @error('methods.'.$sellerId) <p class="field-error">{{ $message }}</p> @enderror
 
+                    @if (! \App\Support\Money::isZero($group['shop_discount']))
+                        <p class="mt-2 flex justify-between text-sm text-brand-700"><span>🏷 {{ implode(' · ', $group['offer_labels']) }}</span><span>-{{ money($group['shop_discount']) }}</span></p>
+                    @endif
+                    @if ($group['method'] === \App\Enums\DeliveryMethod::Delivery)
+                        <fieldset class="mt-2 text-sm">
+                            <legend class="font-semibold">Tip for the rider (optional, all of it goes to them)</legend>
+                            <div class="mt-1 flex flex-wrap gap-2">
+                                @foreach ([0, 5, 10, 20] as $amount)
+                                    <label class="choice py-1"><input type="radio" name="tips[{{ $sellerId }}]" value="{{ $amount }}" class="accent-brand-700" @checked((float) ($tips[$sellerId] ?? 0) === (float) $amount)> {{ $amount ? money($amount) : 'No tip' }}</label>
+                                @endforeach
+                            </div>
+                        </fieldset>
+                    @endif
                     <p class="mt-3 flex justify-between border-t border-stone-100 pt-2 text-sm">
                         <span>Order total for this seller</span><strong>{{ money($group['total']) }}</strong>
                     </p>
@@ -213,7 +235,13 @@
 
         <aside class="card h-fit space-y-2 p-4 lg:sticky lg:top-36">
             <div class="flex justify-between"><span>Items</span><span>{{ money($summary['items_total']) }}</span></div>
+            @if (! \App\Support\Money::isZero($summary['shop_discount_total']))
+                <div class="flex justify-between text-brand-700"><span>Shop offers</span><span>-{{ money($summary['shop_discount_total']) }}</span></div>
+            @endif
             <div class="flex justify-between"><span>Delivery</span><span>{{ money($summary['delivery_total']) }}</span></div>
+            @if (! \App\Support\Money::isZero($summary['tips_total']))
+                <div class="flex justify-between"><span>Tip for the rider</span><span>{{ money($summary['tips_total']) }}</span></div>
+            @endif
             @if (! \App\Support\Money::isZero($summary['pass_savings']))
                 <div class="flex justify-between text-brand-700"><span>WiBuy Pass free delivery</span><span>-{{ money($summary['pass_savings']) }}</span></div>
             @endif

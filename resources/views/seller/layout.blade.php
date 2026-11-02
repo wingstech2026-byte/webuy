@@ -12,6 +12,7 @@
             'seller.earnings' => ['Earnings', 'seller.earnings'],
             'seller.reviews' => ['Ratings', 'seller.reviews'],
             'seller.questions.*' => ['Questions', 'seller.questions.index'],
+            'seller.live.*' => ['🔴 Live', 'seller.live.index'],
             'seller.promotions*' => ['Promotions', 'seller.promotions'],
             'seller.rfqs.*' => ['Quote requests', 'seller.rfqs.index'],
             'seller.group-buys.*' => ['Group buys', 'seller.group-buys.index'],
