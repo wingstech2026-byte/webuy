@@ -4,6 +4,7 @@ import '../api/models.dart';
 import '../session.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'following_screen.dart';
 
 class ShopScreen extends StatelessWidget {
   const ShopScreen({super.key, required this.slug});
@@ -34,6 +35,10 @@ class ShopScreen extends StatelessWidget {
                 seller.location,
                 if (seller.ratingCount > 0) '★ ${seller.ratingAvg.toStringAsFixed(1)} (${seller.ratingCount})',
               ].join(' · ')),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: FollowButton(slug: seller.slug, following: json['is_following'] == true, followers: (json['followers'] as num?)?.toInt() ?? 0),
             ),
             if ((seller.description ?? '').isNotEmpty)
               Padding(

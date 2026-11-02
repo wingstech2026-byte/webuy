@@ -317,6 +317,26 @@ class _SellerReportScreenState extends State<SellerReportScreen> {
                           style: const TextStyle(fontWeight: FontWeight.w800)),
                     ),
                   ),
+                if (((r['forecast'] as List?) ?? const []).isNotEmpty) ...[
+                  _heading('⏳ Will run out soon'),
+                  for (final f in (r['forecast'] as List).whereType<Map<String, dynamic>>())
+                    Card(
+                      child: ListTile(
+                        dense: true,
+                        title: Text('${f['title']}'),
+                        subtitle: Text('Sells about ${f['per_day']} a day · ${f['stock']} left'),
+                        trailing: Text((f['days_left'] as num) < 1 ? 'Out today' : 'about ${f['days_left']} day(s)', style: const TextStyle(fontWeight: FontWeight.w800, color: WiBuyColors.orange)),
+                      ),
+                    ),
+                ],
+                if (((r['hours'] as List?) ?? const []).any((h) => (h as num) > 0)) ...[
+                  _heading('🕐 Best time to sell'),
+                  Builder(builder: (context) {
+                    final hours = (r['hours'] as List).map((h) => (h as num).toInt()).toList();
+                    final best = hours.indexOf(hours.reduce((a, b) => a > b ? a : b));
+                    return Card(child: Padding(padding: const EdgeInsets.all(14), child: Text('Most orders come around ${best.toString().padLeft(2, '0')}:00: a good time for offers and live shows.')));
+                  }),
+                ],
                 _heading('Running low'),
                 if (low.isEmpty)
                   const Card(

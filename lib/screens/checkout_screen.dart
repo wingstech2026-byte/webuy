@@ -24,7 +24,11 @@ class CheckoutScreen extends StatefulWidget {
       this.couponId,
       this.sample = false,
       this.variantId,
-      this.teamToken});
+      this.teamToken,
+      this.addonIds = const []});
+
+  /// Extras chosen on the product page ("Buy now").
+  final List<int> addonIds;
 
   /// Checking out for an office team order (delivered to the office with colleagues' meals).
   final String? teamToken;
@@ -74,6 +78,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   /// Instant food: where the buyer is (when the address has no map pin) and an optional delivery time.
   LatLng? _here;
   DateTime? _deliverAt;
+
+  /// A shop's offer code and tips for the rider (seller id => Le).
+  final _promo = TextEditingController();
+  final Map<int, int> _tips = {};
   late int? _couponId = widget.couponId;
   bool _couponTouched = false;
   List<Coupon> _coupons = [];
@@ -112,7 +120,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   @override
   void dispose() {
-    for (final c in [_name, _phone, _addressText, _note, _payerPhone]) {
+    for (final c in [_name, _phone, _addressText, _note, _payerPhone, _promo]) {
       c.dispose();
     }
     super.dispose();
@@ -123,6 +131,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         if (_isBuyNow) 'qty': widget.quantity,
         if (_isBuyNow && widget.variantId != null) 'variant': widget.variantId,
         if (widget.sample) 'sample': true,
+        if (_isBuyNow && widget.addonIds.isNotEmpty) 'addons': widget.addonIds,
+        if (_promo.text.trim().isNotEmpty) 'promo_code': _promo.text.trim(),
+        if (_tips.values.any((t) => t > 0)) 'tips': _tips.map((k, v) => MapEntry('$k', v)),
       };
 
   Future<void> _requote() async {
@@ -424,6 +435,27 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   Text(quote.couponError!,
                       style: const TextStyle(color: Colors.red)),
               ],
+              _section('Shop offer code (optional)'),
+              Row(children: [
+                Expanded(child: TextField(controller: _promo, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(hintText: 'FRIDAY10'))),
+                const SizedBox(width: 8),
+                OutlinedButton(onPressed: _quoting ? null : _requote, child: const Text('Apply')),
+              ]),
+              if (quote.promoError != null) Text(quote.promoError!, style: const TextStyle(color: Colors.red)),
+              for (final g in quote.groups.where((g) => _methods[g.sellerId] == 'delivery')) ...[
+                _section('Tip for the rider · ${g.seller.shopName} (all of it goes to them)'),
+                Wrap(spacing: 8, children: [
+                  for (final amount in const [0, 5, 10, 20])
+                    ChoiceChip(
+                      label: Text(amount == 0 ? 'No tip' : formatLe('$amount.00')),
+                      selected: (_tips[g.sellerId] ?? 0) == amount,
+                      onSelected: (_) {
+                        setState(() => _tips[g.sellerId] = amount);
+                        _requote();
+                      },
+                    ),
+                ]),
+              ],
               if (quote.canPayInParts)
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
@@ -436,7 +468,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 ),
               const SizedBox(height: 18),
               _row('Items', quote.itemsTotal),
+              if (quote.shopDiscountTotal != '0.00') _row('Shop offers', '-${quote.shopDiscountTotal}'),
               _row('Delivery', quote.deliveryTotal),
+              if (quote.tipsTotal != '0.00') _row('Tip for the rider', quote.tipsTotal),
               if (quote.passSavings != '0.00')
                 _row('WiBuy Pass free delivery', '-${quote.passSavings}'),
               if (quote.couponDiscount != '0.00')

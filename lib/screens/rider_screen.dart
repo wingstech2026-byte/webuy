@@ -204,7 +204,8 @@ class _RiderJobScreenState extends State<RiderJobScreen> {
   }
 
   void _followSharing() {
-    final carrying = _job.status == 'picked_up';
+    // From taking the job until it is delivered: the buyer sees the rider come to the shop, then to them.
+    final carrying = _job.status == 'assigned' || _job.status == 'picked_up';
     if (carrying && _sharing == null) {
       _sharing =
           Timer.periodic(const Duration(seconds: 20), (_) => _shareLocation());

@@ -12,6 +12,7 @@ import 'business_screen.dart';
 import 'chat_screen.dart';
 import 'compare_screen.dart';
 import 'details_screen.dart';
+import 'following_screen.dart';
 import 'global_screen.dart';
 import 'group_buy_screen.dart';
 import 'login_screen.dart';
@@ -74,6 +75,22 @@ class AccountScreen extends StatelessWidget {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const WishlistScreen())),
+              ),
+            if (user != null)
+              ListTile(
+                leading: const Icon(Icons.storefront_outlined),
+                title: Text(tr(context, 'Following')),
+                subtitle: const Text('News from shops you follow'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FollowingScreen())),
+              ),
+            if (user != null)
+              ListTile(
+                leading: const Icon(Icons.card_giftcard),
+                title: Text(tr(context, 'Invite friends')),
+                subtitle: const Text('You both get a coupon when they order'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InviteScreen())),
               ),
             if (user != null)
               ListTile(

@@ -389,7 +389,11 @@ class CartLine {
       required this.isWholesale,
       required this.product,
       this.problem,
-      this.variantName});
+      this.variantName,
+      this.addons});
+
+  /// Extras on each dish ("Extra meat, Extra pepper").
+  final String? addons;
 
   factory CartLine.fromJson(Map<String, dynamic> j) => CartLine(
         id: j['id'] as int,
@@ -401,6 +405,9 @@ class CartLine {
         product: Product.fromJson(j['product'] as Map<String, dynamic>),
         variantName:
             (j['variant'] as Map<String, dynamic>?)?['name'] as String?,
+        addons: (j['addons'] as List?)?.isNotEmpty == true
+            ? (j['addons'] as List).map((a) => (a as Map)['name']).join(', ')
+            : null,
       );
 
   final String? variantName;
@@ -485,7 +492,15 @@ class QuoteGroup {
     this.stationDoorFee,
     this.isInstant = false,
     this.etaMinutes,
+    this.shopDiscount = '0.00',
+    this.offerLabels = const [],
+    this.riderTip = '0.00',
   });
+
+  /// The shop's own offers on this order (paid by the shop) and the tip for the rider.
+  final String shopDiscount;
+  final List<String> offerLabels;
+  final String riderTip;
 
   /// Instant food: delivered in about [etaMinutes] (cooking + the ride), or at a chosen time.
   final bool isInstant;
@@ -523,6 +538,9 @@ class QuoteGroup {
       stationDoorFee: j['station_door_fee'] as String?,
       isInstant: j['is_instant'] == true,
       etaMinutes: (j['eta_minutes'] as num?)?.toInt(),
+      shopDiscount: _s(j['shop_discount'] ?? '0.00'),
+      offerLabels: ((j['offer_labels'] as List?) ?? const []).map((e) => '$e').toList(),
+      riderTip: _s(j['rider_tip'] ?? '0.00'),
     );
   }
 
@@ -575,7 +593,16 @@ class Quote {
     this.stations = const [],
     this.stationId,
     this.team,
+    this.shopDiscountTotal = '0.00',
+    this.tipsTotal = '0.00',
+    this.promoError,
   }) : amountDue = amountDue ?? grandTotal;
+
+  final String shopDiscountTotal;
+  final String tipsTotal;
+
+  /// Why the shop offer code did not work.
+  final String? promoError;
 
   /// An office team order this checkout is for: {token, title, place, is_open, organiser_pays_delivery}.
   final Map<String, dynamic>? team;
@@ -601,6 +628,9 @@ class Quote {
             : const [],
         stationId: (j['station_id'] as num?)?.toInt(),
         team: j['team'] as Map<String, dynamic>?,
+        shopDiscountTotal: _s(j['shop_discount_total'] ?? '0.00'),
+        tipsTotal: _s(j['tips_total'] ?? '0.00'),
+        promoError: j['promo_error'] as String?,
       );
 
   /// WiBuy stations the buyer can collect at, nearest first (id, name, address, district, opening_hours).

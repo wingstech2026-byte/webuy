@@ -38,7 +38,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   void _followLive() {
-    final onTheWay = _order?.riderDelivery?['stage'] == 'picked_up';
+    final stage = _order?.riderDelivery?['stage'];
+    final onTheWay = stage == 'assigned' || stage == 'picked_up';
     if (onTheWay && _live == null) {
       _live = Timer.periodic(const Duration(seconds: 20), (_) async {
         try {
@@ -582,7 +583,9 @@ Widget _riderCard(Map<String, dynamic> rider) {
           const SizedBox(height: 6),
           Text(
             tracking['km'] != null
-                ? 'About ${tracking['km']} km away · about ${tracking['minutes']} min${tracking['to_station'] != null ? ' to ${tracking['to_station']}' : ''}'
+                ? (tracking['phase'] == 'to_shop'
+                    ? 'The rider is ${tracking['km']} km from the shop · collects your order in about ${tracking['minutes']} min'
+                    : 'About ${tracking['km']} km away · about ${tracking['minutes']} min${tracking['to_station'] != null ? ' to ${tracking['to_station']}' : ''}')
                 : 'The rider is on the way.',
             style: const TextStyle(
                 fontSize: 16,

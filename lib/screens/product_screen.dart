@@ -27,7 +27,17 @@ class ProductDetail {
             .toList(),
         questions = ((j['questions'] as List?) ?? const [])
             .whereType<Map<String, dynamic>>()
-            .toList();
+            .toList(),
+        addons = ((j['addons'] as List?) ?? const []).whereType<Map<String, dynamic>>().toList(),
+        offers = ((j['offers'] as List?) ?? const []).whereType<Map<String, dynamic>>().map((o) => '${o['label']}').toList(),
+        bundles = ((j['bundles'] as List?) ?? const []).whereType<Map<String, dynamic>>().toList();
+
+  /// Extras for a dish: {id, name, price}.
+  final List<Map<String, dynamic>> addons;
+
+  /// The shop's own offers ("Buy 2 Oil, get 1 free") and bundles with this product.
+  final List<String> offers;
+  final List<Map<String, dynamic>> bundles;
 
   final Product product;
 
@@ -73,6 +83,9 @@ class _ProductBodyState extends State<_ProductBody> {
 
   /// The chosen option, when the product has options (sizes, colours...).
   ProductOption? _option;
+
+  /// Extras ticked (extra meat...).
+  final Set<int> _addons = {};
 
   @override
   void initState() {
@@ -127,7 +140,8 @@ class _ProductBodyState extends State<_ProductBody> {
     try {
       final cart = await session.api.post('/cart/${p.slug}', {
         'quantity': _qty,
-        if (_option != null) 'variant': _option!.id
+        if (_option != null) 'variant': _option!.id,
+        if (_addons.isNotEmpty) 'addons': _addons.toList(),
       }) as Map<String, dynamic>;
       session.setCartCount((cart['count'] as num?)?.toInt() ?? 0);
       if (mounted) showMessage(context, 'Added to your cart.');
@@ -143,7 +157,20 @@ class _ProductBodyState extends State<_ProductBody> {
     if (!await ensureLoggedIn(context) || !mounted) return;
     Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => CheckoutScreen(
-            productSlug: p.slug, quantity: _qty, variantId: _option?.id)));
+            productSlug: p.slug, quantity: _qty, variantId: _option?.id, addonIds: _addons.toList())));
+  }
+
+  /// Every item of a bundle into the cart; the bundle price is taken off at checkout.
+  Future<void> _addBundle(Map<String, dynamic> bundle) async {
+    if (!await ensureLoggedIn(context) || !mounted) return;
+    final session = SessionScope.read(context);
+    try {
+      final cart = await session.api.post('/bundles/${bundle['id']}/cart') as Map<String, dynamic>;
+      session.setCartCount((cart['count'] as num?)?.toInt() ?? 0);
+      if (mounted) showMessage(context, '${bundle['title']} is in your cart: the bundle price is taken off at checkout.');
+    } on Object catch (e) {
+      if (mounted) showMessage(context, e);
+    }
   }
 
   Future<void> _toggleSave() async {
@@ -391,6 +418,33 @@ class _ProductBodyState extends State<_ProductBody> {
                     ),
                 ]),
               ],
+              if (widget.data.offers.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Wrap(spacing: 6, runSpacing: 4, children: [
+                  for (final offer in widget.data.offers) Chip(label: Text('🏷 $offer'), backgroundColor: Colors.red.shade50),
+                ]),
+              ],
+              if (widget.data.addons.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                const Text('Extras (optional, for each one)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                Wrap(spacing: 8, runSpacing: 6, children: [
+                  for (final addon in widget.data.addons)
+                    FilterChip(
+                      label: Text('${addon['name']} +${formatLe(addon['price'] as String?)}'),
+                      selected: _addons.contains((addon['id'] as num).toInt()),
+                      onSelected: (on) => setState(() => on ? _addons.add((addon['id'] as num).toInt()) : _addons.remove((addon['id'] as num).toInt())),
+                    ),
+                ]),
+              ],
+              for (final bundle in widget.data.bundles)
+                Card(
+                  child: ListTile(
+                    leading: const Text('🎁', style: TextStyle(fontSize: 24)),
+                    title: Text('${bundle['title']}: ${formatLe(bundle['price'] as String?)} (instead of ${formatLe(bundle['normal_price'] as String?)})'),
+                    subtitle: Text(((bundle['items'] as List?) ?? const []).join(' + ')),
+                    trailing: TextButton(onPressed: () => _addBundle(bundle), child: const Text('Add all')),
+                  ),
+                ),
               const SizedBox(height: 16),
               Row(children: [
                 const Text('Quantity',

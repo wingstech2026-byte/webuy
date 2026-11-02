@@ -10,6 +10,7 @@ import 'chat_screen.dart';
 import 'deals_screen.dart';
 import 'group_buy_screen.dart';
 import 'instant_screen.dart';
+import 'live_screen.dart';
 import 'login_screen.dart';
 import 'nearby_screen.dart';
 import 'notifications_screen.dart';
@@ -203,6 +204,18 @@ class HomeScreen extends StatelessWidget {
                   subtitle: Text(tr(context, 'Hot food near you in 30-60 min · office orders')),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InstantScreen())),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+              child: Card(
+                child: ListTile(
+                  leading: const Text('🔴', style: TextStyle(fontSize: 26)),
+                  title: Text(tr(context, 'Live selling'), style: const TextStyle(fontWeight: FontWeight.w800)),
+                  subtitle: Text(tr(context, 'Watch shops show their goods and buy live')),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LiveListScreen())),
                 ),
               ),
             ),

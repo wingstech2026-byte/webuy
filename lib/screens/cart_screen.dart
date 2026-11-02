@@ -106,6 +106,7 @@ class _CartScreenState extends State<CartScreen> {
                             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                               Text(line.product.title, maxLines: 2, overflow: TextOverflow.ellipsis),
                               if (line.variantName != null) Text(line.variantName!, style: const TextStyle(fontWeight: FontWeight.w700, color: WiBuyColors.green)),
+                              if (line.addons != null) Text('+ ${line.addons}', style: const TextStyle(color: WiBuyColors.muted)),
                               Text('${formatLe(line.unitPrice)} each${line.isWholesale ? ' · bulk price' : ''}',
                                   style: const TextStyle(color: WiBuyColors.muted, fontSize: 13)),
                               if (line.problem != null)
