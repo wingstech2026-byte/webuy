@@ -16,11 +16,13 @@
         @endforeach
     </div>
 
+    @if ($money)
     <div class="mt-3 grid gap-3 sm:grid-cols-3">
         <div class="card p-4"><p class="text-sm font-semibold text-stone-500">Pending (orders in progress)</p><p class="mt-1 text-2xl font-extrabold">{{ money($money['pending']) }}</p></div>
         <div class="card p-4"><p class="text-sm font-semibold text-stone-500">Available to pay out</p><p class="mt-1 text-2xl font-extrabold text-brand-700">{{ money($money['available']) }}</p></div>
         <div class="card p-4"><p class="text-sm font-semibold text-stone-500">Paid out</p><p class="mt-1 text-2xl font-extrabold">{{ money($money['paid_out']) }}</p></div>
     </div>
+    @endif
 
     <div class="mt-4 grid gap-3 sm:grid-cols-2">
         <a href="{{ route('seller.products.create') }}" class="btn btn-primary">Add a product</a>

@@ -79,6 +79,17 @@ class OrderResource extends JsonResource
                 'name' => $this->collectStation->name, 'address' => $this->collectStation->address, 'district' => $this->collectStation->district,
                 'opening_hours' => $this->collectStation->opening_hours, 'ready' => $this->at_collect_station_at !== null,
             ] : null,
+            // Before the shop accepts, the buyer can still cancel (not group buys or orders paid in parts).
+            // Instant food: delivered now (or at deliver_at); the shop taps "Food ready" to call a rider.
+            'is_instant' => (bool) $this->is_instant,
+            'deliver_at' => $this->deliver_at?->toIso8601String(),
+            'food_ready_at' => $this->food_ready_at?->toIso8601String(),
+            'can_mark_food_ready' => (bool) $this->is_instant && $this->status === OrderStatus::Accepted && $this->food_ready_at === null && $request->user()?->seller?->id === $this->seller_id,
+            'team' => $this->team_order_id ? ['token' => $this->teamOrder?->token, 'title' => $this->teamOrder?->title] : null,
+            // "Remind me to order again every N days" (null: off).
+            'repeat_every_days' => $this->whenLoaded('repeat', fn () => $this->repeat?->is_active ? $this->repeat->every_days : null),
+            'receipt_url' => $this->paid_at ? route('orders.receipt', $this->resource) : null,
+            'can_cancel' => $isBuyer && $this->status === OrderStatus::Paid && $this->milestones()->doesntExist() && $this->groupParticipant()->doesntExist(),
             'can_confirm_delivery' => $isBuyer && in_array($this->status, [OrderStatus::Shipped, OrderStatus::Delivered], true),
             'can_report_problem' => $isBuyer && in_array($this->status, OrderStatus::disputable(), true),
             'can_return' => $isBuyer && $this->status === OrderStatus::Delivered && $this->returnRequest === null,

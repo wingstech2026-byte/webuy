@@ -19,7 +19,7 @@ class SellerApplicationController extends Controller
 {
     public function create(Request $request)
     {
-        $seller = $request->user()->seller;
+        $seller = $request->user()->ownShop();
 
         return view('sell.apply', [
             'seller' => $seller?->load('logo'),
@@ -59,7 +59,7 @@ class SellerApplicationController extends Controller
     public function identity(OwnerIdentityRequest $request, OwnerIdentityService $identity): RedirectResponse
     {
         try {
-            $identity->store($request->user()->seller, $request->validated('owner_id_number'), IdentityDocument::from($request->validated('owner_id_type')),
+            $identity->store($request->user()->ownShop() ?? abort(404), $request->validated('owner_id_number'), IdentityDocument::from($request->validated('owner_id_type')),
                 $request->validated('owner_nationality'), $request->file('owner_id_front'), $request->file('owner_id_back'));
         } catch (MarketplaceException $e) {
             return back()->withErrors(['general' => $e->getMessage()]);

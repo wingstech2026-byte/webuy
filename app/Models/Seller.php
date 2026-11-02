@@ -5,11 +5,13 @@ namespace App\Models;
 use App\Enums\Operator;
 use App\Enums\SellerStatus;
 use App\Services\SettingsService;
+use Carbon\CarbonInterface;
 use Database\Factories\SellerFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 
@@ -22,7 +24,8 @@ class Seller extends Model
         'user_id', 'shop_name', 'slug', 'description', 'district', 'area', 'pickup_address',
         'payout_phone', 'payout_operator', 'business_registration_no', 'status', 'is_verified',
         'rejection_reason', 'offers_delivery', 'offers_pickup', 'commission_percent',
-        'rating_avg', 'rating_count', 'approved_at',
+        'rating_avg', 'rating_count', 'approved_at', 'free_delivery_from', 'holiday_until', 'holiday_message',
+        'is_instant', 'opens_at', 'closes_at', 'prep_minutes',
     ];
 
     protected function casts(): array
@@ -34,6 +37,9 @@ class Seller extends Model
             'offers_delivery' => 'boolean',
             'offers_pickup' => 'boolean',
             'commission_percent' => 'decimal:2',
+            'free_delivery_from' => 'decimal:2',
+            'holiday_until' => 'date',
+            'is_instant' => 'boolean',
             'rating_avg' => 'decimal:2',
             'approved_at' => 'datetime',
             'owner_id_number' => 'encrypted',
@@ -43,6 +49,42 @@ class Seller extends Model
 
     /** The owner's ID card never leaves the server in JSON (API, logs); admins see it on the approval page only. */
     protected $hidden = ['owner_id_number', 'owner_id_number_hash', 'owner_id_front_path', 'owner_id_back_path'];
+
+    /** Opening hours ("08:00"-"20:00", also past midnight); no hours set: always open. */
+    public function isOpenAt(?CarbonInterface $at = null): bool
+    {
+        if ($this->opens_at === null || $this->closes_at === null) {
+            return true;
+        }
+
+        $time = ($at ?? now())->format('H:i');
+
+        return $this->opens_at <= $this->closes_at
+            ? $time >= $this->opens_at && $time < $this->closes_at
+            : $time >= $this->opens_at || $time < $this->closes_at;
+    }
+
+    public function hoursLabel(): ?string
+    {
+        return $this->opens_at && $this->closes_at ? "{$this->opens_at}–{$this->closes_at}" : null;
+    }
+
+    /** Instant delivery estimate: cooking, then about 4 minutes per km in town traffic. Never a promise. */
+    public function instantEtaMinutes(float $km): int
+    {
+        return (int) ($this->prep_minutes + 5 + ceil($km * 4));
+    }
+
+    /** Closed for a few days: the products show, but cannot be ordered until the shop is back. */
+    public function isOnHoliday(): bool
+    {
+        return $this->holiday_until !== null && $this->holiday_until->endOfDay()->isFuture();
+    }
+
+    public function holidayNotice(): string
+    {
+        return "{$this->shop_name} is closed until ".$this->holiday_until->format('j M').($this->holiday_message ? ": {$this->holiday_message}" : '.');
+    }
 
     /** The owner sent their national ID number and a photo of the card (needed before approval). */
     public function hasOwnerIdentity(): bool
@@ -59,6 +101,12 @@ class Seller extends Model
     public function getRouteKeyName(): string
     {
         return 'slug';
+    }
+
+    /** Helpers who manage orders and products (not money or shop settings). */
+    public function staff(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'seller_staff')->withTimestamps();
     }
 
     public function user(): BelongsTo

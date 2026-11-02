@@ -15,12 +15,13 @@
 
     <div class="card mb-6 overflow-x-auto">
         <table class="w-full text-sm">
-            <thead><tr class="text-left"><th class="th">Rider</th><th class="th">Phone</th><th class="th text-right">Delivered</th></tr></thead>
+            <thead><tr class="text-left"><th class="th">Rider</th><th class="th">Phone</th><th class="th text-right">Delivered</th><th class="th text-right">Rating</th></tr></thead>
             <tbody>
                 @forelse ($riders as $rider)
-                    <tr><td class="td">{{ $rider->name }}</td><td class="td">{{ $rider->display_phone }}</td><td class="td text-right">{{ $rider->delivered_count }}</td></tr>
+                    <tr><td class="td">{{ $rider->name }}</td><td class="td">{{ $rider->display_phone }}</td><td class="td text-right">{{ $rider->delivered_count }}</td>
+                        <td class="td text-right">@php($stars = \App\Services\DeliveryService::riderRating($rider->id)) {{ $stars ? '★ '.$stars['average'].' ('.$stars['count'].')' : '—' }}</td></tr>
                 @empty
-                    <tr><td class="td" colspan="3">No riders yet.</td></tr>
+                    <tr><td class="td" colspan="4">No riders yet.</td></tr>
                 @endforelse
             </tbody>
         </table>

@@ -20,6 +20,7 @@ use App\Models\RfqQuote;
 use App\Models\SellerLocation;
 use App\Services\BuyerProtectionService;
 use App\Services\GroupBuyService;
+use App\Services\InstantService;
 use App\Services\LedgerService;
 use App\Services\OrderService;
 use App\Services\PayoutService;
@@ -29,7 +30,9 @@ use App\Services\ProductVideoService;
 use App\Services\RfqService;
 use App\Services\SellerReportService;
 use App\Services\SettingsService;
+use App\Services\SponsoredProductService;
 use App\Services\VariantService;
+use App\Services\WishlistAlertService;
 use App\Support\GroupBuyOfferRules;
 use App\Support\Money;
 use Illuminate\Http\JsonResponse;
@@ -59,7 +62,8 @@ class SellerController extends Controller
             'shop_name' => $seller->shop_name,
             'reliability_score' => $seller->reliability_score,
             'counts' => collect(WebOrderController::TABS)->map(fn ($statuses) => collect($statuses)->sum(fn ($s) => (int) ($counts[$s->value] ?? 0))),
-            'money' => $ledger->summary($seller),
+            'money' => $request->user()->isShopOwner() ? $ledger->summary($seller) : null, // helpers do not see the money
+            'is_owner' => $request->user()->isShopOwner(),
             'min_payout' => SettingsService::minPayout(),
             'product_count' => $seller->products()->count(),
             'low_stock' => $seller->products()->where('stock', '<=', 5)->where('status', '!=', 'suspended')->orderBy('stock')->limit(5)->get(['slug', 'title', 'stock']),
@@ -113,6 +117,7 @@ class SellerController extends Controller
             'reject' => $orders->reject($order, $data['reason']),
             'ship' => $orders->ship($order, $data['reason'] ?? null),
             'deliver' => $orders->markDelivered($order),
+            'food-ready' => app(InstantService::class)->foodReady($order, $request->user()),
             default => abort(404),
         };
 
@@ -155,9 +160,20 @@ class SellerController extends Controller
         if ($product) {
             // A lower price: recent buyers get the difference as a coupon (price protection).
             app(BuyerProtectionService::class)->onPriceChange($saved->refresh());
+            app(WishlistAlertService::class)->afterChange($saved); // "price dropped" / "back in stock"
         }
 
         return response()->json(['data' => $this->productJson($request, $saved->refresh()->load('images', 'tiers', 'seller', 'variants'))], $product ? 200 : 201);
+    }
+
+    /** Sponsor a live product for some days (paid from the shop's balance). */
+    public function promote(Request $request, Product $product, SponsoredProductService $sponsored): JsonResponse
+    {
+        $this->seller($request);
+        abort_if(Gate::denies('manage', $product), 404);
+        $promoted = $sponsored->promote($product, $request->user(), $request->integer('days'));
+
+        return response()->json(['sponsored_until' => $promoted->sponsored_until->toIso8601String(), 'price_per_day' => SponsoredProductService::pricePerDay()]);
     }
 
     /** The bulk upload columns and an example, so the app can show what to paste. */

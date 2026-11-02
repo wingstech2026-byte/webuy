@@ -44,6 +44,8 @@ class SellerApplicationRequest extends FormRequest
             'business_registration_no' => ['nullable', 'string', 'max:60'],
             'offers_delivery' => ['boolean'],
             'offers_pickup' => ['boolean'],
+            // Free delivery for orders from this amount (the shop pays the delivery). Empty: no offer.
+            'free_delivery_from' => ['nullable', 'decimal:0,2', 'min:1', 'max:99999999'],
             'logo' => $this->imageRules(),
         ] + ($this->isApplication() ? $this->ownerIdentityRules(! $this->user()->seller?->hasOwnerIdentity()) : []);
     }

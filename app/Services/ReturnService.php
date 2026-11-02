@@ -220,7 +220,7 @@ class ReturnService
             $locked = ReturnRequest::lockForUpdate()->findOrFail($return->id);
             $order = Order::lockForUpdate()->with('items', 'buyer', 'seller')->findOrFail($locked->order_id);
 
-            if ($order->seller->user_id !== $sellerUser->id) {
+            if ($sellerUser->seller?->id !== $order->seller_id) {
                 throw new MarketplaceException('This is not your order.');
             }
 

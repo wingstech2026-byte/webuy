@@ -10,7 +10,7 @@ class SavedAddress extends Model
 {
     protected $fillable = [
         'user_id', 'label', 'recipient_name', 'recipient_phone', 'district', 'town', 'neighbourhood',
-        'street', 'landmark', 'directions', 'latitude', 'longitude', 'is_default',
+        'street', 'landmark', 'directions', 'latitude', 'longitude', 'is_default', 'building', 'floor',
     ];
 
     protected function casts(): array
@@ -35,6 +35,7 @@ class SavedAddress extends Model
     /** One line people can read, for orders and sellers. */
     public function getOneLineAttribute(): string
     {
-        return collect([$this->street, $this->neighbourhood, $this->town, $this->landmark ? "({$this->landmark})" : null])->filter()->implode(', ');
+        // An office: "Africell House, floor 3, ..." so the rider finds the right desk.
+        return collect([$this->building, $this->floor ? "floor {$this->floor}" : null, $this->street, $this->neighbourhood, $this->town, $this->landmark ? "({$this->landmark})" : null])->filter()->implode(', ');
     }
 }

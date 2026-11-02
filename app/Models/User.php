@@ -8,6 +8,7 @@ use App\Support\PhoneNumber;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -37,12 +38,56 @@ class User extends Authenticatable
             'is_rider' => 'boolean',
             'last_login_at' => 'datetime',
             'chat_banned_at' => 'datetime',
+            'rider_available_until' => 'datetime',
         ];
+    }
+
+    /** A rider who said "I'm available" in the last few hours (for instant food jobs near them). */
+    public function isRiderAvailable(): bool
+    {
+        return $this->is_rider && $this->rider_available_until?->isFuture() === true;
+    }
+
+    /** Name and location given (the phone is checked at login): needed before buying. */
+    public function hasBuyerDetails(): bool
+    {
+        return filled($this->name) && filled($this->district) && filled($this->area);
     }
 
     public function seller(): HasOne
     {
         return $this->hasOne(Seller::class);
+    }
+
+    /** The shop this person helps in (added by its owner). */
+    public function staffShops(): BelongsToMany
+    {
+        return $this->belongsToMany(Seller::class, 'seller_staff')->withTimestamps();
+    }
+
+    /**
+     * "$user->seller": the person's own shop, or else the shop they help in, so helpers use the same seller pages.
+     * Money and shop settings check isShopOwner() as well.
+     */
+    public function getSellerAttribute(): ?Seller
+    {
+        return $this->getRelationValue('seller') ?? $this->getRelationValue('staffShops')->first();
+    }
+
+    /** Their own shop only (never one they help in). */
+    public function ownShop(): ?Seller
+    {
+        return $this->getRelationValue('seller');
+    }
+
+    public function isShopOwner(): bool
+    {
+        return $this->ownShop()?->status === SellerStatus::Approved;
+    }
+
+    public function isShopStaff(): bool
+    {
+        return $this->ownShop() === null && $this->getRelationValue('staffShops')->isNotEmpty();
     }
 
     /** Deliveries this user took as a WiBuy rider. */

@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\ReasonRequest;
 use App\Http\Requests\Seller\RejectOrderRequest;
 use App\Models\Order;
+use App\Services\InstantService;
 use App\Services\OrderService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -42,6 +43,14 @@ class OrderController extends Controller
         ]);
     }
 
+    /** A printable parcel label: order number, barcode, where it goes. */
+    public function label(Order $order)
+    {
+        $this->authorize('manage', $order);
+
+        return view('seller.orders.label', ['order' => $order->load('items', 'seller', 'dropStation', 'collectStation')]);
+    }
+
     public function show(Order $order)
     {
         $this->authorize('manage', $order);
@@ -52,6 +61,12 @@ class OrderController extends Controller
     public function accept(Order $order): RedirectResponse
     {
         return $this->run($order, fn () => $this->orders->accept($order), 'Order accepted. The buyer was told.');
+    }
+
+    /** Cooked and packed: a WiBuy rider is called (office orders: every colleague's order in one trip). */
+    public function foodReady(Request $request, Order $order, InstantService $instant): RedirectResponse
+    {
+        return $this->run($order, fn () => $instant->foodReady($order, $request->user()), 'A WiBuy rider is being called. The buyer was told the food is ready.');
     }
 
     public function reject(RejectOrderRequest $request, Order $order): RedirectResponse

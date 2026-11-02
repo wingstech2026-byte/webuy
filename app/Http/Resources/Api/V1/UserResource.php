@@ -19,6 +19,9 @@ class UserResource extends JsonResource
             'name' => $this->name,
             'phone' => $this->phone,
             'display_phone' => $this->display_phone,
+            'district' => $this->district,
+            'area' => $this->area,
+            'has_details' => $this->hasBuyerDetails(), // name and location given: needed before buying
             'is_seller' => $this->isSeller(),
             'is_admin' => $this->is_admin,
             'is_agent' => (bool) $this->is_agent,

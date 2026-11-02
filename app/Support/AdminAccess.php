@@ -15,6 +15,7 @@ final class AdminAccess
     /** @var array<string, list<AdminRole>> route name pattern => roles (besides owners) */
     private const RULES = [
         'admin.dashboard' => [AdminRole::Support, AdminRole::Finance, AdminRole::Catalogue, AdminRole::Marketing],
+        'admin.analytics' => [AdminRole::Finance, AdminRole::Marketing],
 
         'admin.orders.index' => [AdminRole::Support, AdminRole::Finance],
         'admin.orders.show' => [AdminRole::Support, AdminRole::Finance],

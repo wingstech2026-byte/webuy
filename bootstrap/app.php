@@ -4,6 +4,7 @@ use App\Exceptions\MarketplaceException;
 use App\Http\Middleware\AuditAdminActions;
 use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\EnsureSeller;
+use App\Http\Middleware\EnsureShopOwner;
 use App\Http\Middleware\RememberVisitor;
 use App\Http\Middleware\SetLanguage;
 use Illuminate\Foundation\Application;
@@ -20,7 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->alias(['admin' => EnsureAdmin::class, 'seller' => EnsureSeller::class, 'audit' => AuditAdminActions::class]);
+        $middleware->alias(['admin' => EnsureAdmin::class, 'seller' => EnsureSeller::class, 'shop-owner' => EnsureShopOwner::class, 'audit' => AuditAdminActions::class]);
         $middleware->web(append: [RememberVisitor::class, SetLanguage::class]);
 
         // Payment webhooks come from the gateway, not a browser, so they carry no CSRF token.

@@ -17,6 +17,17 @@ class SellerResource extends JsonResource
         $logo = $this->relationLoaded('logo') ? $this->logo : null;
 
         return [
+            // Instant food delivery: open hours and cooking time.
+            'is_instant' => (bool) $this->is_instant,
+            'hours' => $this->hoursLabel(),
+            'opens_at' => $this->opens_at,
+            'closes_at' => $this->closes_at,
+            'prep_minutes' => $this->prep_minutes,
+            'is_open' => $this->isOpenAt(),
+            // Holiday mode: products show but cannot be ordered until this date.
+            'holiday_until' => $this->isOnHoliday() ? $this->holiday_until->toDateString() : null,
+            'holiday_notice' => $this->isOnHoliday() ? $this->holidayNotice() : null,
+            'free_delivery_from' => $this->free_delivery_from !== null ? (string) $this->free_delivery_from : null,
             'id' => $this->id,
             'user_id' => $this->user_id, // to start a chat with the seller
             'slug' => $this->slug,

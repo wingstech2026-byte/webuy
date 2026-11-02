@@ -78,6 +78,8 @@
                 <div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-stone-600">
                     <x-stars :rating="$product->rating_avg" :count="$product->rating_count" />
                     <span>&middot; {{ $product->condition->label() }}</span>
+                    @if ($product->seller->isOnHoliday()) <span class="badge bg-amber-100 text-amber-900">🏖 {{ $product->seller->holidayNotice() }}</span> @endif
+                    @if ($product->seller->free_delivery_from && $product->seller->offers_delivery) <span class="badge bg-amber-100 text-amber-900">🚚 Free delivery from {{ money($product->seller->free_delivery_from) }}</span> @endif
                     @if ($product->genuine_guarantee) <span class="badge bg-brand-100 text-brand-800" title="If it is fake you get your money back plus compensation">✅ Genuine guarantee</span> @endif
                     @if ($product->sold_count > 0) <span>&middot; {{ $product->sold_count }} sold</span> @endif
                 </div>
@@ -215,6 +217,31 @@
             @endif
         </div>
     </div>
+
+    {{-- Questions and answers --}}
+    <section class="mt-8" aria-labelledby="questions">
+        <h2 id="questions" class="mb-3 text-xl font-extrabold">{{ __('Questions and answers') }}</h2>
+        @forelse ($questions as $q)
+            <div class="card mb-2 p-3 text-sm">
+                <p class="font-semibold">❓ {{ $q->question }}</p>
+                <p class="mt-1">💬 {{ $q->answer }} <span class="text-xs text-stone-500">&middot; {{ $product->seller->shop_name }}</span></p>
+            </div>
+        @empty
+            <p class="mb-2 text-stone-500">No questions yet.</p>
+        @endforelse
+        @auth
+            @unless ($isOwner)
+                <form method="POST" action="{{ route('products.questions.store', $product) }}" class="mt-2 flex flex-wrap gap-2">
+                    @csrf
+                    <input name="question" required minlength="5" maxlength="500" class="input flex-1" value="{{ old('question') }}" placeholder="Ask the shop about this product" aria-label="Your question">
+                    <button class="btn btn-outline btn-sm">Ask</button>
+                </form>
+                @error('question') <p class="field-error">{{ $message }}</p> @enderror
+            @endunless
+        @else
+            <a href="{{ route('login') }}" class="text-sm font-semibold text-brand-700 underline">Log in to ask a question</a>
+        @endauth
+    </section>
 
     {{-- Reviews --}}
     <section class="mt-8" aria-labelledby="reviews">

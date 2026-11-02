@@ -31,8 +31,13 @@ class CheckoutRequest extends FormRequest
             'variant' => ['nullable', 'integer'],
 
             'address_id' => ['nullable', 'integer'],
-            'recipient_name' => ['required_without:address_id', 'nullable', 'string', 'max:80'],
-            'recipient_phone' => ['required_without:address_id', 'nullable', $this->phoneRule()],
+            'recipient_name' => ['required_without_all:address_id,team', 'nullable', 'string', 'max:80'],
+            'recipient_phone' => ['required_without_all:address_id,team', 'nullable', $this->phoneRule()],
+            // Instant food: the exact spot, an optional delivery time, or an office team order (its token).
+            'latitude' => ['nullable', 'numeric', 'required_with:longitude'],
+            'longitude' => ['nullable', 'numeric', 'required_with:latitude'],
+            'deliver_at' => ['nullable', 'date'],
+            'team' => ['nullable', 'string', 'max:16'],
             'district' => ['nullable', Rule::in(config('wibuy.districts'))],
             'address' => ['nullable', 'string', 'max:200'],
             'note' => ['nullable', 'string', 'max:200'],

@@ -48,7 +48,9 @@ class StockService
     /** @param iterable<array{product_id: int, variant_id: ?int, quantity: int}> $lines */
     public function reserve(iterable $lines): void
     {
+        $lines = collect($lines);
         $this->move($lines, 'decrement');
+        app(LowStockService::class)->check($lines->pluck('product_id')); // "running low" to the shop, once
     }
 
     /** @param iterable<array{product_id: int, variant_id: ?int, quantity: int}> $lines */

@@ -33,6 +33,7 @@ class Product extends Model
             'price' => 'decimal:2',
             'compare_at_price' => 'decimal:2',
             'genuine_guarantee' => 'boolean',
+            'sponsored_until' => 'datetime',
             'rating_avg' => 'decimal:2',
             'condition' => ProductCondition::class,
             'status' => ProductStatus::class,
@@ -46,6 +47,12 @@ class Product extends Model
     public function getRouteKeyName(): string
     {
         return 'slug';
+    }
+
+    /** The seller paid to show it first (always labelled "Sponsored"). */
+    public function isSponsored(): bool
+    {
+        return $this->sponsored_until !== null && $this->sponsored_until->isFuture();
     }
 
     /** The seller's short video of the product, if any. */
@@ -128,6 +135,21 @@ class Product extends Model
         return $this->relationLoaded('variants')
             ? $this->variants->contains('is_active', true)
             : $this->variants()->active()->exists();
+    }
+
+    /** Restocked above the low-stock line: the shop may be told again next time. */
+    protected static function booted(): void
+    {
+        static::saving(function (Product $product) {
+            if ($product->isDirty('stock') && $product->stock > 5) {
+                $product->low_stock_notified_at = null;
+            }
+        });
+    }
+
+    public function questions(): HasMany
+    {
+        return $this->hasMany(ProductQuestion::class);
     }
 
     /** Reviews with photos first (they help other buyers most), then the newest. */

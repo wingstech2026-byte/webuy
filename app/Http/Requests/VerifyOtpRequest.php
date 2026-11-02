@@ -2,35 +2,35 @@
 
 namespace App\Http\Requests;
 
-use App\Models\User;
+use App\Http\Requests\Concerns\ValidatesBuyerDetails;
 use Illuminate\Foundation\Http\FormRequest;
 
+/** The SMS code, plus the name and location of new people (and of accounts that miss them). */
 class VerifyOtpRequest extends FormRequest
 {
+    use ValidatesBuyerDetails;
+
     public function authorize(): bool
     {
         return true;
     }
 
-    /** New people (and people who never gave a name) must give their name. */
-    public function needsName(): bool
+    protected function detailsPhone(): ?string
     {
-        return ! User::where('phone', $this->session()->get('otp_phone'))->whereNotNull('name')->exists();
+        return $this->session()->get('otp_phone');
     }
 
     public function rules(): array
     {
         return [
             'code' => ['required', 'digits:'.config('wibuy.otp.length')],
-            'name' => [$this->needsName() ? 'required' : 'nullable', 'string', 'max:80'],
-        ];
+        ] + $this->buyerDetailsRules($this->needsName(), $this->needsLocation());
     }
 
     public function messages(): array
     {
         return [
             'code.digits' => 'The code is '.config('wibuy.otp.length').' numbers.',
-            'name.required' => 'Please tell us your name.',
-        ];
+        ] + $this->buyerDetailsMessages();
     }
 }

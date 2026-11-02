@@ -11,6 +11,7 @@ use App\Models\Payout;
 use App\Models\Station;
 use App\Models\User;
 use App\Services\DeliveryService;
+use App\Services\InstantService;
 use App\Services\LedgerService;
 use App\Services\PayoutService;
 use App\Services\RiderTrackingService;
@@ -33,7 +34,7 @@ class RiderController extends Controller
         return view('rider.index', [
             'district' => $district,
             'open' => DeliveryJob::where('status', DeliveryJob::OPEN)->when($district, fn ($q) => $q->where('dropoff_district', $district))
-                ->latest('id')->limit(50)->get(),
+                ->orderByDesc('is_instant')->latest('id')->limit(50)->get(),
             'mine' => DeliveryJob::where('rider_id', $rider->id)->whereIn('status', [DeliveryJob::ASSIGNED, DeliveryJob::PICKED_UP])->with('order')->latest('id')->get(),
             'done' => DeliveryJob::where('rider_id', $rider->id)->where('status', DeliveryJob::DELIVERED),
         ]);
@@ -54,6 +55,7 @@ class RiderController extends Controller
         try {
             match ($action) {
                 'accept' => $this->deliveries->accept($deliveryJob, $rider),
+                'accept-route' => $this->deliveries->acceptRoute($deliveryJob, $rider),
                 'release' => $this->deliveries->release($deliveryJob, $rider),
                 'picked-up' => $this->deliveries->pickedUp($deliveryJob, $rider),
                 'deliver' => $request->hasFile('photo')
@@ -66,7 +68,22 @@ class RiderController extends Controller
 
         return $action === 'release'
             ? redirect()->route('rider.index')->with('status', 'Job given back.')
-            : redirect()->route('rider.jobs.show', $deliveryJob)->with('status', 'Done.');
+            : ($action === 'accept-route' ? redirect()->route('rider.index')->with('status', 'You took the parcels on this route. Collect them all at the station.')
+            : redirect()->route('rider.jobs.show', $deliveryJob)->with('status', 'Done.'));
+    }
+
+    /** "I'm available for food jobs near me" (one point, kept 3 hours at most) or "I'm off". */
+    public function available(Request $request, InstantService $instant): RedirectResponse
+    {
+        $data = $request->validate(['lat' => ['nullable', 'numeric', 'required_with:lng'], 'lng' => ['nullable', 'numeric', 'required_with:lat']]);
+
+        try {
+            $instant->setAvailable($request->user(), isset($data['lat']) ? (float) $data['lat'] : null, isset($data['lng']) ? (float) $data['lng'] : null);
+        } catch (MarketplaceException $e) {
+            return back()->withErrors(['general' => $e->getMessage()]);
+        }
+
+        return back()->with('status', isset($data['lat']) ? 'You are available for 3 hours. Food shops near you will call you.' : 'You are off. No more calls.');
     }
 
     /** The rider's phone reports where it is while carrying a parcel (only the latest point is kept). */
@@ -148,6 +165,11 @@ class RiderController extends Controller
             'dropoff_address' => $mine && ! $job->isTransfer() ? trim(($order->address ?? '').($order->landmark ? ' · '.$order->landmark : '')) : null,
             'dropoff_latitude' => $mine && $job->dropoff_latitude !== null ? (float) $job->dropoff_latitude : null,
             'dropoff_longitude' => $mine && $job->dropoff_longitude !== null ? (float) $job->dropoff_longitude : null,
+            // Station to station: other open parcels on the same route can be taken in the same trip.
+            'same_route_open' => ($job->isTransfer() || $order?->team_order_id) && $job->status === DeliveryJob::OPEN ? app(DeliveryService::class)->sameRoute($job)->count() : 0,
+            // Cooked food: deliver it first.
+            'is_instant' => (bool) $job->is_instant,
+            'deliver_at' => $job->is_instant ? $order?->deliver_at?->toIso8601String() : null,
             'code_attempts_left' => max(0, DeliveryService::MAX_CODE_ATTEMPTS - $job->code_attempts),
             'created_at' => $job->created_at?->toIso8601String(),
         ];

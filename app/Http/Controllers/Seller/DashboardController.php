@@ -27,7 +27,7 @@ class DashboardController extends Controller
                 'delivered' => (int) ($counts[OrderStatus::Delivered->value] ?? 0),
                 'disputed' => (int) ($counts[OrderStatus::Disputed->value] ?? 0),
             ],
-            'money' => $ledger->summary($seller),
+            'money' => $request->user()->isShopOwner() ? $ledger->summary($seller) : null, // helpers do not see the money
             'newOrders' => Order::where('seller_id', $seller->id)->where('status', OrderStatus::Paid)
                 ->with('items')->orderBy('accept_by')->limit(5)->get(),
             'lowStock' => $seller->products()->where('stock', '<=', 5)->where('status', '!=', 'suspended')->orderBy('stock')->limit(5)->get(),

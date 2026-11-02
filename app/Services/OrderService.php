@@ -134,6 +134,36 @@ class OrderService
         });
     }
 
+    /**
+     * The buyer changed their mind before the seller accepted: cancelled, stock back, full refund.
+     * Not for group-buy places (the group counts on them) or orders paid in parts.
+     *
+     * @throws MarketplaceException
+     */
+    public function cancelByBuyer(Order $order, User $buyer): Order
+    {
+        if ($order->buyer_id !== $buyer->id) {
+            throw new MarketplaceException('This is not your order.');
+        }
+
+        if ($order->groupParticipant()->exists()) {
+            throw new MarketplaceException('This is a group-buy order: it is refunded by itself if the group does not fill.');
+        }
+
+        if ($order->milestones()->exists()) {
+            throw new MarketplaceException('Orders paid in parts cannot be cancelled here. Please contact WiBuy support.');
+        }
+
+        return $this->transition($order, [OrderStatus::Paid], function (Order $order) {
+            $order->forceFill(['status' => OrderStatus::Cancelled, 'cancelled_at' => now()])->save();
+
+            $this->releaseStock($order);
+            $this->payments->refundOrder($order, 'You cancelled the order before the shop accepted it.');
+            $order->loadMissing('seller.user');
+            $this->sms->send($order->seller->user->phone, "WiBuy: The buyer cancelled order {$order->number} before you accepted it. You do not need to do anything.");
+        });
+    }
+
     /** The refund went through. Called by PaymentService with the order locked. */
     public function markRefunded(Order $order): void
     {

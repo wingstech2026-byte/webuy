@@ -76,6 +76,8 @@ final class RewardSettings
         'station_door_fee' => ['Pickup stations', 'Extra for delivery from the station to the door: the rider gets this (Le)', 'money', '20.00'],
         'station_partner_share' => ['Pickup stations', 'Each partner station that handles a parcel gets (Le)', 'money', '4.00'],
         'station_max_km' => ['Pickup stations', 'A shop can use a station this many km away at most', 'int', 15],
+
+        'sponsored_price_per_day' => ['Sponsored products', 'A seller pays this per product per day, from their balance (Le)', 'money', '10.00'],
     ];
 
     public static function int(string $key): int

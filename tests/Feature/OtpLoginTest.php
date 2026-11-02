@@ -50,7 +50,7 @@ class OtpLoginTest extends TestCase
         $this->post('/login', ['phone' => '076123456']);
         $code = $this->sms->lastCodeTo(self::PHONE);
 
-        $this->post('/login/verify', ['code' => $code, 'name' => 'Aminata Kamara'])
+        $this->post('/login/verify', ['code' => $code, 'name' => 'Aminata Kamara', 'district' => 'Bo', 'area' => 'Bo town'])
             ->assertRedirect(route('home'));
 
         $user = User::where('phone', self::PHONE)->firstOrFail();

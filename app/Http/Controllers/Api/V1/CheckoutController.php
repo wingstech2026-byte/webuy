@@ -15,6 +15,7 @@ use App\Http\Resources\Api\V1\SellerResource;
 use App\Models\Checkout;
 use App\Models\Coupon;
 use App\Models\SavedAddress;
+use App\Models\TeamOrder;
 use App\Services\CartService;
 use App\Services\CheckoutLines;
 use App\Services\CheckoutService;
@@ -53,6 +54,7 @@ class CheckoutController extends Controller
             'lat' => ['nullable', 'numeric', 'required_with:lng'],
             'lng' => ['nullable', 'numeric', 'required_with:lat'],
             'station_id' => ['nullable', 'integer'],
+            'team' => ['nullable', 'string', 'max:16'],
         ]);
 
         [$lines, $source] = $this->lines->resolve($request->user(), $data['product'] ?? null, $data['qty'] ?? null, (bool) ($data['sample'] ?? false), $data['variant'] ?? null);
@@ -62,7 +64,14 @@ class CheckoutController extends Controller
         $point = $saved?->hasPoint() ? ['lat' => (float) $saved->latitude, 'lng' => (float) $saved->longitude]
             : (isset($data['lat']) ? ['lat' => $data['lat'], 'lng' => $data['lng']] : null);
         $coupon = isset($data['coupon_id']) ? Coupon::where('user_id', $user->id)->find($data['coupon_id']) : null;
-        $summary = $this->checkouts->summarize($lines, $district, $data['methods'] ?? [], $user, $coupon, 'app', $point, $data['station_id'] ?? null);
+        // An office team order: delivered to the office (the organiser pays the delivery once).
+        $team = isset($data['team']) ? TeamOrder::where('token', $data['team'])->first() : null;
+
+        if ($team) {
+            [$district, $point] = [$team->district, ['lat' => (float) $team->latitude, 'lng' => (float) $team->longitude]];
+        }
+
+        $summary = $this->checkouts->summarize($lines, $district, $data['methods'] ?? [], $user, $coupon, 'app', $point, $data['station_id'] ?? null, $team);
         $stations = app(StationService::class)->stationsFor($district, $point['lat'] ?? null, $point['lng'] ?? null);
 
         return response()->json([
@@ -88,11 +97,19 @@ class CheckoutController extends Controller
                 'distance_km' => $group['distance_km'],
                 'delivery_window' => $group['delivery_window'],
                 'free_delivery' => ! Money::isZero($group['pass_discount']),
+                // The shop's own free delivery from an amount.
+                'shop_free_delivery' => ! Money::isZero($group['shop_pays_delivery']),
+                'free_delivery_from' => $group['free_delivery_from'],
                 // WiBuy stations (null when the shop has no station near it).
                 'can_station' => $group['drop_station'] !== null,
                 'station_fee' => $group['station_fee'],
                 'station_door_fee' => $group['station_door_fee'],
+                // Instant food: delivered in about this many minutes (cooking + the ride), or at a chosen time.
+                'is_instant' => (bool) $group['seller']->is_instant,
+                'eta_minutes' => $group['seller']->is_instant && $group['distance_km'] !== null ? $group['seller']->instantEtaMinutes((float) $group['distance_km']) : null,
+                'is_open' => $group['seller']->isOpenAt(),
             ])->values(),
+            'team' => $team ? ['token' => $team->token, 'title' => $team->title, 'place' => $team->place, 'is_open' => $team->isOpen(), 'organiser_pays_delivery' => $team->leader_id !== $user->id] : null,
             // Stations the buyer can collect at, nearest first.
             'stations' => $stations->map(fn ($s): array => ['id' => $s->id, 'name' => $s->name, 'address' => $s->address, 'district' => $s->district, 'opening_hours' => $s->opening_hours])->values(),
             'station_id' => $summary['groups'] ? collect($summary['groups'])->first()['collect_station']?->id : null,
@@ -131,14 +148,18 @@ class CheckoutController extends Controller
                 'unit_price' => $line['unit_price'] ?? null,
                 'is_sample' => $line['is_sample'] ?? null,
             ], fn ($value) => $value !== null))->all(),
-            ['station_id' => $data['station_id'] ?? null] + ($request->filled('address_id')
+            ['station_id' => $data['station_id'] ?? null, 'deliver_at' => $data['deliver_at'] ?? null]
+            + (($team = isset($data['team']) ? TeamOrder::where('token', $data['team'])->first() : null) ? ['team_order_id' => $team->id] : [])
+            + ($request->filled('address_id')
                 ? GroupBuyController::fromSavedAddress(SavedAddress::where('user_id', $user->id)->findOrFail($request->integer('address_id')))
                 : [
-                    'name' => $data['recipient_name'],
-                    'phone' => $data['recipient_phone'],
+                    'name' => $data['recipient_name'] ?? $user->name,
+                    'phone' => $data['recipient_phone'] ?? $user->phone,
                     'district' => $data['district'] ?? null,
                     'address' => $data['address'] ?? null,
                     'note' => $data['note'] ?? null,
+                    'latitude' => isset($data['latitude']) ? (float) $data['latitude'] : null,
+                    'longitude' => isset($data['longitude']) ? (float) $data['longitude'] : null,
                 ]),
             $data['methods'],
             Operator::from($data['operator']),

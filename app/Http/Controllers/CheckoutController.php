@@ -10,6 +10,7 @@ use App\Http\Requests\CheckoutRequest;
 use App\Models\Checkout;
 use App\Models\Coupon;
 use App\Models\Product;
+use App\Models\TeamOrder;
 use App\Models\User;
 use App\Services\CartService;
 use App\Services\CheckoutLines;
@@ -34,6 +35,12 @@ class CheckoutController extends Controller
     {
         $user = $request->user();
 
+        if (! $user->hasBuyerDetails()) {
+            $request->session()->put('url.intended', $request->fullUrl()); // back to checkout after saving
+
+            return redirect()->route('account.details')->with('status', 'Before buying, please add your full name and where you live. Your cart is saved.');
+        }
+
         try {
             [$lines, $source] = $this->lines($request, $user);
         } catch (MarketplaceException $e) {
@@ -46,9 +53,17 @@ class CheckoutController extends Controller
         $couponId = $request->input('coupon_id', old('coupon_id'));
         $coupon = $couponId ? Coupon::where('user_id', $user->id)->find($couponId) : null;
         $stationId = $request->integer('station_id', (int) old('station_id')) ?: null;
+        // Instant food: the buyer's spot (from "Use my location") and an office team order.
+        $team = self::team($request->input('team', old('team')));
+        $lat = $request->input('latitude', old('latitude'));
+        $point = $team ? ['lat' => (float) $team->latitude, 'lng' => (float) $team->longitude]
+            : (is_numeric($lat) && is_numeric($request->input('longitude', old('longitude'))) ? ['lat' => (float) $lat, 'lng' => (float) $request->input('longitude', old('longitude'))] : null);
+        $district = $team?->district ?? $district;
 
         return view('checkout.show', [
-            'summary' => $this->checkouts->summarize($lines, $district, $methods, $user, $coupon, 'web', null, $stationId),
+            'summary' => $this->checkouts->summarize($lines, $district, $methods, $user, $coupon, 'web', $point, $stationId, $team),
+            'point' => $point,
+            'team' => $team,
             'stations' => app(StationService::class)->stationsFor($district),
             'stationId' => $stationId,
             'coupons' => $this->coupons->usable($user, 'web'),
@@ -75,13 +90,16 @@ class CheckoutController extends Controller
                 $user,
                 $lines->map(fn ($line) => ['product_id' => $line['product']->id, 'variant_id' => $line['variant']?->id, 'quantity' => $line['quantity']])->all(),
                 [
-                    'name' => $data['recipient_name'],
-                    'phone' => $data['recipient_phone'],
+                    'name' => $data['recipient_name'] ?? $user->name,
+                    'phone' => $data['recipient_phone'] ?? $user->phone,
                     'district' => $data['district'] ?? null,
                     'address' => $data['address'] ?? null,
                     'note' => $data['note'] ?? null,
                     'station_id' => $data['station_id'] ?? null,
-                ],
+                    'latitude' => isset($data['latitude']) ? (float) $data['latitude'] : null,
+                    'longitude' => isset($data['longitude']) ? (float) $data['longitude'] : null,
+                    'deliver_at' => $data['deliver_at'] ?? null,
+                ] + (($team = self::team($data['team'] ?? null)) ? ['team_order_id' => $team->id] : []),
                 $data['methods'],
                 Operator::from($data['operator']),
                 $data['payer_phone'],
@@ -97,6 +115,11 @@ class CheckoutController extends Controller
         }
 
         return redirect()->route('checkout.status', $checkout);
+    }
+
+    private static function team(?string $token): ?TeamOrder
+    {
+        return $token ? TeamOrder::where('token', $token)->first() : null;
     }
 
     /** "Approve the payment prompt on your phone": refreshes every 5 seconds until paid or failed. */

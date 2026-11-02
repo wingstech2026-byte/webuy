@@ -62,6 +62,13 @@
     @error('payout_phone') <p class="field-error">{{ $message }}</p> @enderror
 </div>
 <div>
+    <label for="free_delivery_from" class="label">Free delivery for orders from (Le, optional)</label>
+    <input id="free_delivery_from" name="free_delivery_from" type="number" step="0.01" min="1" inputmode="decimal" class="input"
+           value="{{ old('free_delivery_from', $seller?->free_delivery_from) }}" placeholder="e.g. 500">
+    <p class="mt-1 text-xs text-stone-500">Buyers who spend this much in your shop pay no delivery. You pay it (if a WiBuy rider delivers, the rider's fee comes from your earnings).</p>
+    @error('free_delivery_from') <p class="field-error">{{ $message }}</p> @enderror
+</div>
+<div>
     <label for="business_registration_no" class="label">Business registration number (optional)</label>
     <input id="business_registration_no" name="business_registration_no" maxlength="60" class="input" value="{{ old('business_registration_no', $seller?->business_registration_no) }}">
     <p class="mt-1 text-xs text-stone-500">Registered businesses can get a "Verified" badge.</p>

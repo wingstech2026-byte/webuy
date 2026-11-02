@@ -11,6 +11,9 @@ Schedule::command('wibuy:returns-tick')->everyFiveMinutes()->withoutOverlapping(
 Schedule::command('wibuy:late-shipping')->everyFiveMinutes()->withoutOverlapping();       // accepted, not shipped in time: coupon paid by the seller
 Schedule::command('wibuy:complete-orders')->everyFiveMinutes()->withoutOverlapping();     // shipped/delivered 3 days, no dispute
 Schedule::command('wibuy:prune-otp')->daily();
+Schedule::command('wibuy:cart-reminders')->hourly();                                     // items left in a cart for a day
+Schedule::command('wibuy:repeat-reminders')->hourly();                                   // "remind me to order again"
+Schedule::command('wibuy:instant-tick')->everyMinute()->withoutOverlapping();             // cook scheduled food, close office orders, forget rider spots
 Schedule::command('wibuy:rewards-tick')->everyFiveMinutes()->withoutOverlapping();        // "Remind me" SMS for lightning deals, expiry
 Schedule::command('wibuy:rotate-deals')->dailyAt('20:00');                                // tomorrow's automatic lightning deals
 Schedule::command('wibuy:daily-rewards')->dailyAt('09:00');

@@ -212,6 +212,23 @@
                 @error('video') <p class="field-error">{{ $message }}</p> @enderror
             </div>
 
+            @if ($item->exists && $item->isListed())
+                {{-- Belongs to the promote form below (a form inside a form is ignored by browsers). --}}
+                <div class="card space-y-2 p-4">
+                    <h2 class="font-bold">📣 Sponsor this product</h2>
+                    @if ($item->isSponsored())
+                        <p class="text-sm font-semibold text-brand-700">Sponsored until {{ $item->sponsored_until->format('j M, g:ia') }}. More days are added on top.</p>
+                    @endif
+                    <p class="text-xs text-stone-500">Shows first in search and on the home page, labelled "Sponsored". {{ money(\App\Services\SponsoredProductService::pricePerDay()) }} a day, paid from your balance.</p>
+                    <select name="days" form="promote-product" class="input" aria-label="How many days">
+                        @foreach (\App\Services\SponsoredProductService::DAYS as $d)
+                            <option value="{{ $d }}">{{ $d }} day{{ $d > 1 ? 's' : '' }} &middot; {{ money(\App\Support\Money::mul(\App\Services\SponsoredProductService::pricePerDay(), $d)) }}</option>
+                        @endforeach
+                    </select>
+                    <button form="promote-product" class="btn btn-outline btn-sm w-full">Sponsor it</button>
+                </div>
+            @endif
+
             <div class="card space-y-3 p-5">
                 <h2 class="font-bold">Show to buyers?</h2>
                 <label class="choice"><input type="radio" name="status" value="active" class="size-5 accent-brand-700" @checked(old('status', $item->status?->value ?? 'draft') === 'active')> Yes, put it live</label>
@@ -228,6 +245,9 @@
         </div>
     </form>
 
+    @if ($item->exists && $item->isListed())
+        <form id="promote-product" method="POST" action="{{ route('seller.products.promote', $item) }}" onsubmit="return confirm('Pay from your balance to sponsor this product?')">@csrf</form>
+    @endif
     @if ($item->exists)
         <form id="delete-product" method="POST" action="{{ route('seller.products.destroy', $item) }}" onsubmit="return confirm('Delete this product?')">
             @csrf @method('DELETE')

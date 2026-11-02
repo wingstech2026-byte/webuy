@@ -55,6 +55,16 @@
         </section>
     @endif
 
+    @if ($sponsored->isNotEmpty())
+        <section class="mb-8" aria-labelledby="sponsored">
+            <h2 id="sponsored" class="mb-3 text-lg font-extrabold">📣 {{ __('Sponsored') }}</h2>
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                @foreach ($sponsored as $product)
+                    <x-product-card :product="$product" />
+                @endforeach
+            </div>
+        </section>
+    @endif
     @if ($forYou->isNotEmpty())
         <section class="mb-8" aria-labelledby="for-you">
             <h2 id="for-you" class="mb-3 text-lg font-extrabold">{{ __('✨ For you') }}</h2>

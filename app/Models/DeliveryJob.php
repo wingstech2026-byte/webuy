@@ -31,7 +31,7 @@ class DeliveryJob extends Model
     protected $fillable = [
         'order_id', 'seller_id', 'rider_id', 'status', 'kind', 'pickup_station_id', 'dropoff_station_id', 'pickup_name', 'pickup_address', 'pickup_latitude', 'pickup_longitude',
         'dropoff_district', 'dropoff_latitude', 'dropoff_longitude', 'fee', 'proof', 'proof_note',
-        'assigned_at', 'picked_up_at', 'delivered_at',
+        'assigned_at', 'picked_up_at', 'delivered_at', 'is_instant',
     ];
 
     protected $hidden = ['code_hash'];
@@ -40,6 +40,7 @@ class DeliveryJob extends Model
     {
         return [
             'fee' => 'decimal:2',
+            'is_instant' => 'boolean',
             'pickup_latitude' => 'decimal:6',
             'pickup_longitude' => 'decimal:6',
             'dropoff_latitude' => 'decimal:6',

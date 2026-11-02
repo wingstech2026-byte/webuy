@@ -7,6 +7,7 @@
         $supportUnread = app(\App\Services\ChatService::class)->supportUnreadTotal();
         $tabs = [
             'admin.dashboard' => ['Dashboard', 'admin.dashboard'],
+            'admin.analytics' => ['Sales', 'admin.analytics'],
             'admin.sellers.*' => ['Sellers', 'admin.sellers.index'],
             'admin.orders.*' => ['Orders', 'admin.orders.index'],
             'admin.disputes.*' => ['Disputes', 'admin.disputes.index'],

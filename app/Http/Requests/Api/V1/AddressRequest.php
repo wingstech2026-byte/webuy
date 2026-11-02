@@ -38,6 +38,8 @@ class AddressRequest extends FormRequest
             'street' => ['nullable', 'string', 'max:120'],
             'landmark' => ['nullable', 'string', 'max:160'],
             'directions' => ['nullable', 'string', 'max:300'],
+            'building' => ['nullable', 'string', 'max:80'], // offices: building name
+            'floor' => ['nullable', 'string', 'max:20'],
             'latitude' => ['nullable', 'numeric', 'required_with:longitude'],
             'longitude' => ['nullable', 'numeric', 'required_with:latitude'],
             'is_default' => ['nullable', 'boolean'],

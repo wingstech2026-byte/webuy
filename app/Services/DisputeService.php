@@ -78,7 +78,7 @@ class DisputeService
         return DB::transaction(function () use ($dispute, $sellerUser, $response, $photos) {
             $dispute = Dispute::lockForUpdate()->findOrFail($dispute->id);
 
-            if ($dispute->seller->user_id !== $sellerUser->id) {
+            if ($sellerUser->seller?->id !== $dispute->seller->id) {
                 throw new MarketplaceException('This is not your order.');
             }
 

@@ -16,7 +16,7 @@ class WelcomeAndReferralTest extends TestCase
         $normalized = '232'.substr(preg_replace('/\D/', '', $phone), -8);
 
         return $this->withHeaders($device ? ['X-Device-Id' => $device] : [])
-            ->postJson('/api/v1/auth/verify', ['phone' => $phone, 'code' => $this->sms->lastCodeTo($normalized), 'name' => 'New Person'] + $extra)
+            ->postJson('/api/v1/auth/verify', ['phone' => $phone, 'code' => $this->sms->lastCodeTo($normalized), 'name' => 'New Person', 'district' => 'Bo', 'area' => 'Bo town'] + $extra)
             ->assertOk()->json();
     }
 
@@ -73,7 +73,7 @@ class WelcomeAndReferralTest extends TestCase
 
         $this->get('/?ref=abcdefg')->assertOk();
         $this->post(route('login.send'), ['phone' => '076 300 007']);
-        $this->post(route('login.confirm'), ['code' => $this->sms->lastCodeTo('23276300007'), 'name' => 'Web Friend'])->assertRedirect();
+        $this->post(route('login.confirm'), ['code' => $this->sms->lastCodeTo('23276300007'), 'name' => 'Web Friend', 'district' => 'Bo', 'area' => 'Bo town'])->assertRedirect();
 
         $friend = User::where('phone', '23276300007')->firstOrFail();
         $this->assertSame($sharer->id, $friend->referred_by_id);

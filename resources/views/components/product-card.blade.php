@@ -9,6 +9,9 @@
         @if ($product->has_tiers)
             <span class="badge absolute right-2 top-2 bg-amber-400 text-stone-900">Wholesale</span>
         @endif
+        @if ($product->isSponsored())
+            <span class="badge absolute bottom-2 left-2 bg-white/90 text-stone-700">Sponsored</span>
+        @endif
     </div>
     <div class="space-y-1 p-3">
         <h3 class="line-clamp-2 text-sm font-semibold leading-snug">{{ $product->title }}</h3>

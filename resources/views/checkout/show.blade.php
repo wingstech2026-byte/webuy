@@ -11,6 +11,8 @@
             <input type="hidden" name="product" value="{{ $product->slug }}">
             <input type="hidden" name="qty" value="{{ $qty }}">
         @endif
+        @if ($team) <input type="hidden" name="team" value="{{ $team->token }}"> @endif
+        @if ($point && ! $team) <input type="hidden" name="latitude" value="{{ $point['lat'] }}"><input type="hidden" name="longitude" value="{{ $point['lng'] }}"> @endif
         <div class="min-w-56 flex-1">
             <label for="district-pick" class="label">Your district (for delivery fees)</label>
             <select id="district-pick" name="district" class="input">
@@ -58,7 +60,35 @@
             <input type="hidden" name="qty" value="{{ $qty }}">
         @endif
 
+        @php($hasInstant = collect($summary['groups'])->contains(fn ($g) => $g['seller']->is_instant && $g['method'] === \App\Enums\DeliveryMethod::Delivery))
+        @if ($team) <input type="hidden" name="team" value="{{ $team->token }}"> @endif
+        @if ($point && ! $team) <input type="hidden" name="latitude" value="{{ $point['lat'] }}"><input type="hidden" name="longitude" value="{{ $point['lng'] }}"> @endif
+
         <div class="space-y-4">
+            @if ($team)
+                <section class="card border-brand-300 bg-brand-50 p-4">
+                    <h2 class="font-bold">👥 {{ $team->title }}</h2>
+                    <p class="text-sm">Delivered to {{ $team->place }}{{ $team->deliver_at ? ' at '.$team->deliver_at->format('H:i') : ', as soon as it is cooked' }}.
+                        {{ $team->leader_id === $user->id ? 'You opened it: you pay the delivery once for everyone.' : 'The organiser pays the delivery: you pay only for your food.' }}</p>
+                </section>
+            @elseif ($hasInstant)
+                <section class="card space-y-3 border-amber-300 bg-amber-50 p-4">
+                    <h2 class="font-bold">⚡ Instant food delivery</h2>
+                    @if ($point)
+                        <p class="text-sm">📍 We have your location: the rider comes to this spot.
+                            @foreach ($summary['groups'] as $group) @if ($group['seller']->is_instant && $group['distance_km'] !== null) {{ $group['seller']->shop_name }}: about {{ $group['seller']->instantEtaMinutes((float) $group['distance_km']) }} min. @endif @endforeach</p>
+                    @else
+                        <p class="text-sm">The rider needs your exact spot. Tap the button (your browser asks first).</p>
+                        <button type="button" class="btn btn-primary btn-sm" data-locate="{{ request()->fullUrl() }}" data-lat-name="latitude" data-lng-name="longitude">📍 Use my location</button>
+                    @endif
+                    <div>
+                        <label for="deliver_at" class="label">Deliver at a time (optional, e.g. lunch at 1:00 pm)</label>
+                        <input id="deliver_at" type="datetime-local" name="deliver_at" class="input" value="{{ old('deliver_at') }}">
+                        <p class="mt-1 text-xs text-stone-600">Empty: as soon as it is cooked. The shop starts cooking only after you have paid.</p>
+                    </div>
+                </section>
+            @endif
+
             {{-- One block per seller: items and how to get them --}}
             @foreach ($summary['groups'] as $sellerId => $group)
                 <section class="card p-4">
@@ -80,7 +110,13 @@
                             <span>
                                 <strong class="block">Delivery to {{ $district }}</strong>
                                 <span class="text-sm text-stone-600">
-                                    {{ $group['can_deliver'] ? money($group['district_fee']) : 'This seller does not deliver to '.$district }}
+                                    @if ($group['can_deliver'] && ! \App\Support\Money::isZero($group['shop_pays_delivery']))
+                                        <span class="font-semibold text-brand-700">Free delivery (the shop pays {{ money($group['shop_pays_delivery']) }})</span>
+                                    @elseif ($group['can_deliver'] && $group['free_delivery_from'])
+                                        {{ money($group['district_fee']) }} &middot; free from {{ money($group['free_delivery_from']) }} in this shop
+                                    @else
+                                        {{ $group['can_deliver'] ? money($group['district_fee']) : 'This seller does not deliver to '.$district }}
+                                    @endif
                                 </span>
                             </span>
                         </label>
@@ -126,6 +162,7 @@
                 </section>
             @endforeach
 
+            @unless ($team)
             <section class="card space-y-3 p-4">
                 <h2 class="font-bold">Your details</h2>
                 <div>
@@ -148,6 +185,8 @@
                     <input id="note" name="note" class="input" value="{{ old('note') }}" maxlength="200">
                 </div>
             </section>
+
+            @endunless
 
             <section class="card space-y-3 p-4">
                 <h2 class="font-bold">Pay with mobile money</h2>
@@ -187,4 +226,18 @@
             <p class="text-xs text-stone-500">Your money is held safely by {{ config('wibuy.name') }}. Sellers are paid only after you confirm delivery.</p>
         </aside>
     </form>
+
+    <script>
+        // "Use my location": asked only when the buyer taps it; the point goes in the page address, nothing is tracked.
+        document.querySelectorAll('[data-locate]').forEach((button) => button.addEventListener('click', () => {
+            if (!navigator.geolocation) { alert('Your browser cannot share its location.'); return; }
+            button.disabled = true; button.textContent = 'Finding you…';
+            navigator.geolocation.getCurrentPosition((p) => {
+                const url = new URL(button.dataset.locate, location.href);
+                url.searchParams.set(button.dataset.latName || 'lat', p.coords.latitude.toFixed(6));
+                url.searchParams.set(button.dataset.lngName || 'lng', p.coords.longitude.toFixed(6));
+                location.href = url.toString();
+            }, () => { button.disabled = false; button.textContent = 'Try again'; alert('Allow location in your browser, then try again.'); }, { enableHighAccuracy: true, timeout: 15000 });
+        }));
+    </script>
 @endsection

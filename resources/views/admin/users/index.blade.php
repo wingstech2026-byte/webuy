@@ -21,7 +21,7 @@
                 @forelse ($users as $user)
                     <tr>
                         <td class="td font-semibold">{{ $user->name ?: '—' }} @if ($user->isChatBanned()) <span class="badge bg-red-100 text-red-800">chat blocked</span> @endif</td>
-                        <td class="td">{{ $user->display_phone }}</td>
+                        <td class="td">{{ $user->display_phone }}<span class="block text-xs text-stone-500">{{ collect([$user->area, $user->district])->filter()->implode(', ') ?: 'No location yet' }}</span></td>
                         <td class="td">
                             {{ $user->role_label }}
                             @if ($user->seller) <a href="{{ route('admin.sellers.show', $user->seller) }}" class="block text-xs text-brand-700">{{ $user->seller->shop_name }} ({{ $user->seller->status->label() }})</a> @endif

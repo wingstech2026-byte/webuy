@@ -8,7 +8,10 @@ use App\Exceptions\MarketplaceException;
 use App\Models\DeliveryJob;
 use App\Models\Order;
 use App\Models\User;
+use App\Support\Money;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
@@ -35,7 +38,7 @@ class DeliveryService
         return DB::transaction(function () use ($order, $sellerUser) {
             $order = Order::lockForUpdate()->with('seller.user', 'seller.locations')->findOrFail($order->id);
 
-            if ($order->seller->user_id !== $sellerUser->id) {
+            if ($sellerUser->seller?->id !== $order->seller_id) { // the owner or a shop helper
                 throw new MarketplaceException('This is not your order.');
             }
 
@@ -70,7 +73,9 @@ class DeliveryService
                 'dropoff_district' => $order->district,
                 'dropoff_latitude' => $order->delivery_latitude,
                 'dropoff_longitude' => $order->delivery_longitude,
-                'fee' => $order->delivery_fee,
+                // Free delivery from the shop: the buyer paid nothing, the shop pays the rider (from its earnings).
+                'fee' => Money::isZero($order->delivery_fee) ? $order->shop_paid_delivery : $order->delivery_fee,
+                'is_instant' => (bool) $order->is_instant,
                 'assigned_at' => null,
                 'picked_up_at' => null,
             ])->save();
@@ -87,9 +92,10 @@ class DeliveryService
         }
 
         return $this->step($job, null, [DeliveryJob::OPEN], function (DeliveryJob $job) use ($rider) {
-            $active = DeliveryJob::where('rider_id', $rider->id)->whereIn('status', [DeliveryJob::ASSIGNED, DeliveryJob::PICKED_UP])->count();
+            // Parcels on the same station-to-station route are one trip; joining a trip already taken is free.
+            $sameTrip = $this->activeTrips($rider)->contains($this->tripKey($job));
 
-            if ($active >= self::MAX_ACTIVE_PER_RIDER) {
+            if (! $sameTrip && $this->activeTrips($rider)->count() >= self::MAX_ACTIVE_PER_RIDER) {
                 throw new MarketplaceException('Finish your other deliveries first (at most '.self::MAX_ACTIVE_PER_RIDER.' at a time).');
             }
 
@@ -98,6 +104,65 @@ class DeliveryService
             $handsOver = $job->pickupStation?->partner?->phone ?? $job->order->seller->user->phone;
             $this->sms->send($handsOver, "WiBuy: Rider {$rider->name} ({$rider->display_phone}) will collect order {$job->order->number}.");
         });
+    }
+
+    /**
+     * Station to station: take every open parcel on the same route (same two stations) in one trip.
+     *
+     * @return int how many parcels were taken
+     *
+     * @throws MarketplaceException
+     */
+    public function acceptRoute(DeliveryJob $job, User $rider): int
+    {
+        if (! $job->isTransfer() && $job->order?->team_order_id === null) {
+            throw new MarketplaceException('Only station-to-station parcels and office orders can be taken together.');
+        }
+
+        $taken = 0;
+
+        foreach ($this->sameRoute($job)->pluck('id') as $id) {
+            try {
+                $this->accept(DeliveryJob::findOrFail($id), $rider);
+                $taken++;
+            } catch (MarketplaceException $e) {
+                if ($taken === 0) {
+                    throw $e; // the first one tells the rider why
+                }
+            }
+        }
+
+        return $taken;
+    }
+
+    /** Open parcels going between the same two stations, or one office order's parcels (this one included). */
+    public function sameRoute(DeliveryJob $job): Builder
+    {
+        if (! $job->isTransfer()) {
+            $team = $job->order?->team_order_id;
+
+            return DeliveryJob::where('status', DeliveryJob::OPEN)->where('seller_id', $job->seller_id)
+                ->when($team, fn (Builder $q) => $q->whereHas('order', fn (Builder $o) => $o->where('team_order_id', $team)), fn (Builder $q) => $q->whereKey($job->id));
+        }
+
+        return DeliveryJob::where('status', DeliveryJob::OPEN)->where('kind', DeliveryJob::KIND_TRANSFER)
+            ->where('pickup_station_id', $job->pickup_station_id)->where('dropoff_station_id', $job->dropoff_station_id);
+    }
+
+    /** A rider's current trips: each door job is one; station-to-station parcels on one route are one together. */
+    private function activeTrips(User $rider): Collection
+    {
+        return DeliveryJob::where('rider_id', $rider->id)->whereIn('status', [DeliveryJob::ASSIGNED, DeliveryJob::PICKED_UP])->with('order')->get()
+            ->map(fn (DeliveryJob $j) => $this->tripKey($j))->unique()->values();
+    }
+
+    private function tripKey(DeliveryJob $job): string
+    {
+        return match (true) {
+            $job->isTransfer() => "route:{$job->pickup_station_id}-{$job->dropoff_station_id}",
+            $job->order?->team_order_id !== null => "team:{$job->order->team_order_id}", // one office order: one trip
+            default => "job:{$job->id}",
+        };
     }
 
     /** The rider gives the job back before collecting it. */
@@ -129,6 +194,11 @@ class DeliveryService
             }
 
             $this->sms->send($job->order->buyer->phone, "WiBuy: Your order {$job->order->number} is on its way with rider {$rider->name}. Give the rider this code only when you have your goods: {$code}");
+
+            // Ordered for family or a friend: the person receiving it needs the code.
+            if ($job->order->recipientIsSomeoneElse()) {
+                $this->sms->send($job->order->recipient_phone, "WiBuy: {$job->order->buyer->name} sent you order {$job->order->number}. It is on its way with rider {$rider->name} ({$rider->display_phone}). Give the rider this code only when you have the goods: {$code}");
+            }
         });
     }
 
@@ -180,7 +250,7 @@ class DeliveryService
     /** The seller no longer needs a rider (before collection). */
     public function cancel(DeliveryJob $job, User $sellerUser): DeliveryJob
     {
-        if ($job->seller->user_id !== $sellerUser->id) {
+        if ($sellerUser->seller?->id !== $job->seller_id) {
             throw new MarketplaceException('This is not your order.');
         }
 
@@ -192,6 +262,40 @@ class DeliveryService
             $job->forceFill(['status' => DeliveryJob::CANCELLED])->save();
             app(RiderTrackingService::class)->forget($job);
         });
+    }
+
+    /**
+     * The buyer rates the rider who brought the order to their door (once).
+     *
+     * @throws MarketplaceException
+     */
+    public function rate(Order $order, User $buyer, int $stars, ?string $comment): DeliveryJob
+    {
+        $job = DeliveryJob::where('order_id', $order->id)->first();
+
+        if ($order->buyer_id !== $buyer->id || ! $job || ! $job->rider_id || $job->status !== DeliveryJob::DELIVERED || $job->isTransfer()) {
+            throw new MarketplaceException('You can rate the rider after a WiBuy rider has delivered your order.');
+        }
+
+        if ($stars < 1 || $stars > 5) {
+            throw new MarketplaceException('Give 1 to 5 stars.');
+        }
+
+        if ($job->rating !== null) {
+            throw new MarketplaceException('You already rated this rider. Thank you!');
+        }
+
+        $job->forceFill(['rating' => $stars, 'rating_comment' => $comment ? mb_substr(trim($comment), 0, 300) : null])->save();
+
+        return $job;
+    }
+
+    /** A rider's average stars and how many ratings (null when none yet). @return ?array{average: float, count: int} */
+    public static function riderRating(int $riderId): ?array
+    {
+        $row = DeliveryJob::where('rider_id', $riderId)->whereNotNull('rating')->selectRaw('count(*) as n, avg(rating) as avg')->first();
+
+        return (int) $row->n > 0 ? ['average' => round((float) $row->avg, 1), 'count' => (int) $row->n] : null;
     }
 
     /** @throws MarketplaceException */

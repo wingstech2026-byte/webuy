@@ -13,6 +13,7 @@ enum LedgerType: string
     case LateShipping = 'late_shipping';       // - shipped later than promised: the buyer got a coupon
     case GenuineGuarantee = 'genuine_guarantee'; // - goods promised genuine were fake: the buyer got compensation
     case StationFee = 'station_fee';           // + a partner station's share for a parcel it handled
+    case Sponsored = 'sponsored';              // - the seller paid to sponsor a product
 
     public function label(): string
     {
@@ -26,6 +27,7 @@ enum LedgerType: string
             self::LateShipping => 'Late shipping',
             self::GenuineGuarantee => 'Genuine guarantee',
             self::StationFee => 'Station fee',
+            self::Sponsored => 'Sponsored product',
         };
     }
 }

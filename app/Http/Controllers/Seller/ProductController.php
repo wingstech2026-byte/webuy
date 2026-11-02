@@ -12,7 +12,9 @@ use App\Models\Product;
 use App\Services\BuyerProtectionService;
 use App\Services\ProductService;
 use App\Services\ProductVideoService;
+use App\Services\SponsoredProductService;
 use App\Services\VariantService;
+use App\Services\WishlistAlertService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -64,6 +66,20 @@ class ProductController extends Controller
         }
     }
 
+    /** Sponsor a live product for some days, paid from the shop's balance. */
+    public function promote(Request $request, Product $product, SponsoredProductService $sponsored): RedirectResponse
+    {
+        $this->authorize('manage', $product);
+
+        try {
+            $product = $sponsored->promote($product, $request->user(), $request->integer('days'));
+        } catch (MarketplaceException $e) {
+            return back()->withErrors(['general' => $e->getMessage()]);
+        }
+
+        return back()->with('status', "Sponsored until {$product->sponsored_until->format('j M, g:ia')}. It shows first in search and on the home page.");
+    }
+
     public function edit(Product $product)
     {
         $this->authorize('manage', $product);
@@ -88,6 +104,7 @@ class ProductController extends Controller
             $this->saveVideo($request, $product);
             // A lower price: recent buyers get the difference as a coupon (price protection).
             $protected = $this->protection->onPriceChange($product->refresh());
+            app(WishlistAlertService::class)->afterChange($product); // "price dropped" / "back in stock"
         } catch (MarketplaceException $e) {
             return back()->withInput()->withErrors(['general' => $e->getMessage()]);
         }

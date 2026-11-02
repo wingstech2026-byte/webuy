@@ -7,7 +7,7 @@
     <p class="mb-2 text-stone-600">{{ $station->address }} ({{ $station->district }}){{ $station->opening_hours ? ' · '.$station->opening_hours : '' }}{{ $station->is_active ? '' : ' · switched off by WiBuy' }}</p>
     <a href="{{ route('rider.earnings') }}" class="btn btn-outline btn-sm mb-4">💰 My station earnings</a>
 
-    {{-- One box for every step: type the order number from the parcel label. --}}
+    {{-- One box for every step: type the order number from the parcel label, or scan its barcode (a USB scanner types it). --}}
     <div class="grid gap-3 md:grid-cols-3">
         <form method="POST" action="{{ route('station.act', 'from-shop') }}" class="card space-y-2 p-4">
             @csrf

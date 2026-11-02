@@ -7,6 +7,7 @@ use App\Enums\DisputeStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentKind;
 use App\Services\RiderTrackingService;
+use App\Support\PhoneNumber;
 use Database\Factories\OrderFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -31,6 +32,7 @@ class Order extends Model
             'delivery_method' => DeliveryMethod::class,
             'subtotal' => 'decimal:2',
             'delivery_fee' => 'decimal:2',
+            'shop_paid_delivery' => 'decimal:2',
             'commission' => 'decimal:2',
             'late_compensation' => 'decimal:2',
             'commission_percent' => 'decimal:2',
@@ -43,6 +45,10 @@ class Order extends Model
             'stock_reserved' => 'boolean',
             'expires_at' => 'datetime',
             'paid_at' => 'datetime',
+            'is_instant' => 'boolean',
+            'deliver_at' => 'datetime',
+            'food_ready_at' => 'datetime',
+            'cook_reminded_at' => 'datetime',
             'accept_by' => 'datetime',
             'accepted_at' => 'datetime',
             'rejected_at' => 'datetime',
@@ -91,6 +97,26 @@ class Order extends Model
     public function seller(): BelongsTo
     {
         return $this->belongsTo(Seller::class);
+    }
+
+    /** Ordered for someone else (family, a friend): they get the delivery or collection code too. */
+    public function recipientIsSomeoneElse(): bool
+    {
+        $recipient = PhoneNumber::normalize($this->recipient_phone);
+
+        return $recipient !== null && $recipient !== PhoneNumber::normalize($this->buyer?->phone);
+    }
+
+    /** An office team order this belongs to. */
+    public function teamOrder(): BelongsTo
+    {
+        return $this->belongsTo(TeamOrder::class);
+    }
+
+    /** "Remind me to order this again every N days". */
+    public function repeat(): HasOne
+    {
+        return $this->hasOne(OrderRepeat::class);
     }
 
     public function items(): HasMany
@@ -197,6 +223,9 @@ class Order extends Model
             'rider_phone' => $active ? $job->rider?->phone : null,
             // Live: where the rider is, how far and how long (only while the parcel is with the rider).
             'tracking' => app(RiderTrackingService::class)->tracking($job),
+            // After a door delivery the buyer can rate the rider once.
+            'can_rate' => $job->status === DeliveryJob::DELIVERED && ! $job->isTransfer() && $job->rider_id !== null && $job->rating === null,
+            'rating' => $job->rating,
             'steps' => [
                 ['label' => 'Rider found', 'at' => $job->assigned_at?->toIso8601String()],
                 ['label' => 'Rider collected your order', 'at' => $job->picked_up_at?->toIso8601String()],

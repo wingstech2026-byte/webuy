@@ -15,7 +15,7 @@ class AddressController extends Controller
 {
     public static function json(SavedAddress $a): array
     {
-        return $a->only(['id', 'label', 'recipient_name', 'recipient_phone', 'district', 'town', 'neighbourhood', 'street', 'landmark', 'directions', 'is_default']) + [
+        return $a->only(['id', 'label', 'recipient_name', 'recipient_phone', 'district', 'town', 'neighbourhood', 'street', 'landmark', 'directions', 'is_default', 'building', 'floor']) + [
             'latitude' => $a->latitude !== null ? (float) $a->latitude : null,
             'longitude' => $a->longitude !== null ? (float) $a->longitude : null,
             'one_line' => $a->one_line,

@@ -28,7 +28,8 @@ class RiderController extends Controller
         abort_unless($rider->is_rider, 403, 'This is for WiBuy riders.');
         $district = $request->query('district');
 
-        $open = DeliveryJob::where('status', DeliveryJob::OPEN)->when($district, fn ($q) => $q->where('dropoff_district', $district))->with('order')->latest('id')->limit(50)->get();
+        $open = DeliveryJob::where('status', DeliveryJob::OPEN)->when($district, fn ($q) => $q->where('dropoff_district', $district))->with('order')
+            ->orderByDesc('is_instant')->latest('id')->limit(50)->get(); // cooked food first
         $mine = DeliveryJob::where('rider_id', $rider->id)->whereIn('status', [DeliveryJob::ASSIGNED, DeliveryJob::PICKED_UP])->with('order.items')->latest('id')->get();
         $done = DeliveryJob::where('rider_id', $rider->id)->where('status', DeliveryJob::DELIVERED);
 
@@ -36,7 +37,10 @@ class RiderController extends Controller
             'open' => $open->map(fn ($j) => WebRiderController::present($j, $rider))->values(),
             'mine' => $mine->map(fn ($j) => WebRiderController::present($j, $rider))->values(),
             'delivered_count' => (clone $done)->count(),
+            'rating' => DeliveryService::riderRating($rider->id), // {average, count} or null
             'delivered_fees' => (string) ((clone $done)->sum('fee') ?: '0.00'),
+            // "I'm available" for instant food jobs near them, until this time (null: off).
+            'available_until' => $rider->isRiderAvailable() ? $rider->rider_available_until->toIso8601String() : null,
         ]);
     }
 
@@ -95,6 +99,7 @@ class RiderController extends Controller
 
         $job = match ($action) {
             'accept' => $this->deliveries->accept($deliveryJob, $rider),
+            'accept-route' => tap($deliveryJob, fn ($job) => $this->deliveries->acceptRoute($job, $rider))->refresh(),
             'release' => $this->deliveries->release($deliveryJob, $rider),
             'picked-up' => $this->deliveries->pickedUp($deliveryJob, $rider),
             'deliver' => $request->hasFile('photo')

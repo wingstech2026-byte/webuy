@@ -10,6 +10,7 @@
             <h1 class="text-xl font-extrabold">{{ $job['order_number'] ?? 'Delivery job' }}</h1>
             <span class="badge bg-brand-50 text-brand-800">{{ $job['status_label'] }}</span>
         </div>
+        @if ($job['is_instant']) <p class="rounded-lg bg-amber-50 p-2 font-semibold text-amber-900">⚡ Hot food: deliver it straight away{{ $job['deliver_at'] ? ' (expected at '.\Illuminate\Support\Carbon::parse($job['deliver_at'])->format('H:i').')' : '' }}.</p> @endif
         <p><strong>Pay:</strong> {{ money($job['fee']) }}</p>
         <p><strong>Collect at:</strong> {{ $job['pickup_name'] }}, {{ $job['pickup_address'] }}
             @if ($job['pickup_latitude']) &middot; <a class="text-brand-700 underline" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query={{ $job['pickup_latitude'] }},{{ $job['pickup_longitude'] }}">map</a> @endif</p>
@@ -27,6 +28,11 @@
 
         @if ($job['status'] === 'open')
             <form method="POST" action="{{ route('rider.jobs.act', [$model, 'accept']) }}">@csrf<button class="btn btn-primary w-full">Take this job</button></form>
+            @if ($job['same_route_open'] > 1)
+                <form method="POST" action="{{ route('rider.jobs.act', [$model, 'accept-route']) }}">@csrf
+                    <button class="btn btn-outline w-full">Take all {{ $job['same_route_open'] }} parcels on this route (one trip)</button>
+                </form>
+            @endif
         @elseif ($job['status'] === 'assigned')
             <form method="POST" action="{{ route('rider.jobs.act', [$model, 'picked-up']) }}">@csrf<button class="btn btn-primary w-full">{{ $job['kind'] === 'door' ? 'I collected it at the shop' : 'I collected it at the station' }}</button></form>
             <form method="POST" action="{{ route('rider.jobs.act', [$model, 'release']) }}" onsubmit="return confirm('Give this job back?')">@csrf<button class="btn btn-outline w-full">Give the job back</button></form>

@@ -18,6 +18,8 @@ class UserFactory extends Factory
             'name' => fake()->name(),
             'phone' => fake()->unique()->numerify('23276######'),
             'is_admin' => false,
+            'district' => 'Western Area Urban',
+            'area' => 'Lumley',
         ];
     }
 

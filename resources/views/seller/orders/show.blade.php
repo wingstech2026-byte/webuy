@@ -8,11 +8,23 @@
     <div class="mx-auto max-w-2xl space-y-4">
         <div class="flex flex-wrap items-start justify-between gap-2">
             <h1 class="text-2xl font-extrabold">Order {{ $order->number }}</h1>
+    <a href="{{ route('seller.orders.label', $order) }}" target="_blank" class="mb-3 inline-block text-sm font-semibold text-brand-700 underline">🖨 Print the parcel label</a>
+    @if ($order->paid_at) <a href="{{ route('orders.receipt', $order) }}" target="_blank" class="mb-3 ml-3 inline-block text-sm font-semibold text-brand-700 underline">🧾 Receipt</a> @endif
             <span class="badge {{ $order->status->badge() }} text-sm">{{ $order->statusLabel() }}</span>
         </div>
 
+        @if ($order->is_instant)
+            <p class="rounded-lg bg-amber-50 p-3 font-semibold text-amber-900">⚡ Instant food order{{ $order->deliver_at ? ': deliver at '.$order->deliver_at->format('D j M, H:i') : ': cook it now' }}@if ($order->teamOrder) &middot; 👥 office order "{{ $order->teamOrder->title }}" (all its orders go in one trip) @endif</p>
+        @endif
+
         {{-- What to do next --}}
-        @if ($order->status === OrderStatus::Paid)
+        @if ($order->status === OrderStatus::Accepted && $order->is_instant && $order->food_ready_at === null)
+            <form method="POST" action="{{ route('seller.orders.food-ready', $order) }}" class="card space-y-2 border-brand-300 p-4">
+                @csrf
+                <p class="font-bold">Cooked and packed?</p>
+                <button class="btn btn-primary">🍲 Food ready: call a WiBuy rider</button>
+            </form>
+        @elseif ($order->status === OrderStatus::Paid)
             <div class="card space-y-3 border-amber-300 bg-amber-50 p-4">
                 <p class="font-bold text-amber-900">The buyer paid. Please accept by {{ $order->accept_by?->format('j M, g:ia') }}, or they are refunded automatically.</p>
                 <form method="POST" action="{{ route('seller.orders.accept', $order) }}">@csrf<button class="btn btn-primary">Accept order</button></form>

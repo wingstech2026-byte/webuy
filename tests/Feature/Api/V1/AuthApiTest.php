@@ -4,6 +4,7 @@ namespace Tests\Feature\Api\V1;
 
 use App\Models\User;
 use App\Services\OtpService;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /** Phone + SMS code login for the mobile app, which returns a Sanctum token. */
@@ -37,7 +38,7 @@ class AuthApiTest extends TestCase
         $this->postJson('/api/v1/auth/code', ['phone' => '076123456']);
 
         $response = $this->postJson('/api/v1/auth/verify', [
-            'phone' => '076123456', 'code' => $this->codeFor(self::PHONE), 'name' => 'Aminata Kamara', 'device_name' => 'Tecno Spark',
+            'phone' => '076123456', 'code' => $this->codeFor(self::PHONE), 'name' => 'Aminata Kamara', 'district' => 'Bo', 'area' => 'Bo town', 'device_name' => 'Tecno Spark',
         ])->assertOk()->assertJsonPath('user.name', 'Aminata Kamara')->assertJsonPath('user.phone', self::PHONE);
 
         $user = User::where('phone', self::PHONE)->sole();
@@ -47,12 +48,31 @@ class AuthApiTest extends TestCase
             ->assertOk()->assertJsonPath('data.display_phone', '076 123 456');
     }
 
-    public function test_a_new_user_must_give_a_name(): void
+    public function test_a_new_user_must_give_a_name_and_where_they_live(): void
     {
-        $this->postJson('/api/v1/auth/code', ['phone' => '076123456']);
+        $this->postJson('/api/v1/auth/code', ['phone' => '076123456'])->assertJsonPath('needs_name', true)->assertJsonPath('needs_location', true);
 
         $this->postJson('/api/v1/auth/verify', ['phone' => '076123456', 'code' => $this->codeFor(self::PHONE)])
-            ->assertUnprocessable()->assertJsonValidationErrors(['name' => 'Please tell us your name.']);
+            ->assertUnprocessable()->assertJsonValidationErrors([
+                'name' => 'Please tell us your full name.',
+                'district' => 'Please choose the district where you live.',
+                'area' => 'Please type your town or area, e.g. Lumley or Bo town.',
+            ]);
+        $this->postJson('/api/v1/auth/verify', ['phone' => '076123456', 'code' => $this->codeFor(self::PHONE), 'name' => 'Aminata', 'district' => 'Lagos', 'area' => 'Ikeja'])
+            ->assertJsonValidationErrors('district');
+    }
+
+    public function test_an_older_account_without_a_location_gives_it_once_and_can_edit_it(): void
+    {
+        $user = User::factory()->create(['phone' => self::PHONE, 'district' => null, 'area' => null]);
+        $this->postJson('/api/v1/auth/code', ['phone' => '076123456'])->assertJsonPath('needs_name', false)->assertJsonPath('needs_location', true);
+
+        $this->postJson('/api/v1/auth/verify', ['phone' => '076123456', 'code' => $this->codeFor(self::PHONE), 'district' => 'Kenema', 'area' => 'Kenema town'])->assertOk()
+            ->assertJsonPath('user.district', 'Kenema')->assertJsonPath('user.has_details', true);
+
+        Sanctum::actingAs($user->fresh());
+        $this->postJson('/api/v1/me', ['name' => 'Aminata Kamara', 'district' => 'Bo', 'area' => 'Bo town'])->assertOk()->assertJsonPath('data.area', 'Bo town')
+            ->assertJsonPath('data.district', 'Bo');
     }
 
     public function test_a_wrong_code_is_refused_without_a_token(): void

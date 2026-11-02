@@ -53,7 +53,9 @@ class LoginController extends Controller
 
         return view('auth.verify', [
             'phone' => $phone,
-            'needsName' => ! User::where('phone', $phone)->whereNotNull('name')->exists(),
+            'needsName' => blank(($user = User::where('phone', $phone)->first())?->name),
+            'needsLocation' => blank($user?->district) || blank($user?->area),
+            'districts' => config('wibuy.districts'),
         ]);
     }
 
@@ -73,6 +75,11 @@ class LoginController extends Controller
 
         if (! $user->name && $request->filled('name')) {
             $user->name = trim($request->validated('name'));
+        }
+
+        // Where they live, asked at sign-up (and once from accounts that miss it).
+        if ($request->filled('district') && $request->filled('area')) {
+            $user->forceFill(['district' => $request->validated('district'), 'area' => trim($request->validated('area'))]);
         }
 
         $isNew = ! $user->exists;

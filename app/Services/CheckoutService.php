@@ -16,10 +16,12 @@ use App\Models\OrderMilestone;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Station;
+use App\Models\TeamOrder;
 use App\Models\User;
 use App\Sms\SmsMessages;
 use App\Support\Money;
 use App\Support\RewardSettings;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -48,7 +50,7 @@ class CheckoutService
      * @param  ?Coupon  $coupon  a coupon the buyer chose; when it does not apply, coupon_error says why
      * @return array{groups: array<int, array<string, mixed>>, items_total: string, delivery_total: string, grand_total: string, discount_total: string, amount_due: string, coupon: ?Coupon, coupon_discount: string, coupon_error: ?string, pass_savings: string, is_member: bool}
      */
-    public function summarize(Collection $lines, ?string $district, array $methods = [], ?User $buyer = null, ?Coupon $coupon = null, string $channel = 'web', ?array $point = null, ?int $stationId = null): array
+    public function summarize(Collection $lines, ?string $district, array $methods = [], ?User $buyer = null, ?Coupon $coupon = null, string $channel = 'web', ?array $point = null, ?int $stationId = null, ?TeamOrder $team = null): array
     {
         $geo = app(GeoService::class);
         $stations = app(StationService::class);
@@ -98,6 +100,19 @@ class CheckoutService
                 default => '0.00',
             };
 
+            // Office team order: the organiser pays the delivery once; colleagues pay only for their food.
+            if ($team !== null && $method === DeliveryMethod::Delivery && (int) $sellerId === $team->seller_id && $buyer?->id !== $team->leader_id) {
+                $fee = '0.00';
+            }
+
+            // The shop's own offer: free delivery from an amount. The shop pays it (to a rider, if it asks for one).
+            $shopPaysDelivery = '0.00';
+
+            if ($method === DeliveryMethod::Delivery && $seller->free_delivery_from !== null && Money::gt($fee, 0) && Money::gte($subtotal, $seller->free_delivery_from)) {
+                $shopPaysDelivery = $fee;
+                $fee = '0.00';
+            }
+
             // WiBuy Pass: WiBuy pays the delivery fee of eligible shop orders (the seller still gets it). Not station fees.
             $passDiscount = $isMember && $method === DeliveryMethod::Delivery && Money::gt($fee, 0) && Money::gte($subtotal, $freeDeliveryFrom) ? $fee : '0.00';
 
@@ -118,6 +133,8 @@ class CheckoutService
                 'distance_km' => $quote['distance_km'],
                 'delivery_window' => $quote['window'],
                 'delivery_fee' => $fee,
+                'shop_pays_delivery' => $shopPaysDelivery,
+                'free_delivery_from' => $seller->free_delivery_from,
                 'total' => Money::add($subtotal, $fee),
                 'pass_discount' => $passDiscount,
                 'discount' => $passDiscount,
@@ -146,6 +163,7 @@ class CheckoutService
             'coupon_discount' => $couponDiscount,
             'coupon_error' => $couponError,
             'pass_savings' => Money::sum(array_column($groups, 'pass_discount')),
+            'team' => $team,
             'is_member' => $isMember,
         ];
     }
@@ -218,6 +236,11 @@ class CheckoutService
      */
     public function place(User $buyer, array $lines, array $details, array $methods, Operator $operator, string $payerPhone, ?int $couponId = null, string $channel = 'web', array $options = []): Checkout
     {
+        // Every buyer gives their name and where they live (accounts made before that was asked do it once).
+        if (! $buyer->hasBuyerDetails()) {
+            throw new MarketplaceException('Please add your full name and where you live (district and town) under My details before buying.');
+        }
+
         // One line per product and option (variant): "Shirt, Red XL" and "Shirt, Blue M" are separate lines.
         $wanted = collect($lines)
             ->groupBy(fn ($line) => $line['product_id'].':'.($line['variant_id'] ?? ''))
@@ -234,7 +257,20 @@ class CheckoutService
             throw new MarketplaceException('Your cart is empty.');
         }
 
-        return DB::transaction(function () use ($buyer, $wanted, $locked, $milestones, $options, $details, $methods, $operator, $payerPhone, $couponId, $channel) {
+        // An office team order: the office address and time come from it.
+        $team = isset($details['team_order_id']) ? TeamOrder::with('seller')->find($details['team_order_id']) : null;
+
+        if (isset($details['team_order_id'])) {
+            if (! $team?->isOpen()) {
+                throw new MarketplaceException('This office order is closed. Ask the organiser to open a new one.');
+            }
+
+            $details = $team->checkoutDetails() + ['note' => $details['note'] ?? null];
+        }
+
+        $deliverAt = filled($details['deliver_at'] ?? null) ? Carbon::parse($details['deliver_at']) : null;
+
+        return DB::transaction(function () use ($buyer, $wanted, $locked, $milestones, $options, $details, $methods, $operator, $payerPhone, $couponId, $channel, $team, $deliverAt) {
             $products = Product::whereIn('id', $wanted->pluck('product_id')->unique())->orderBy('id')->lockForUpdate()
                 ->with(['seller.deliveryAreas', 'tiers', 'images', 'variants'])->get()->keyBy('id');
             $variants = ProductVariant::whereIn('id', $wanted->pluck('variant_id')->filter()->unique())->orderBy('id')->lockForUpdate()->get()->keyBy('id');
@@ -248,6 +284,10 @@ class CheckoutService
 
                 if (! $product || ! $product->isListed()) {
                     throw new MarketplaceException('One of the items in your cart is no longer available.');
+                }
+
+                if ($product->seller->isOnHoliday()) {
+                    throw new MarketplaceException($product->seller->holidayNotice().' Please order again after that.');
                 }
 
                 if ($product->seller->user_id === $buyer->id) {
@@ -307,7 +347,7 @@ class CheckoutService
             }
 
             $point = isset($details['latitude'], $details['longitude']) ? ['lat' => $details['latitude'], 'lng' => $details['longitude']] : null;
-            $summary = $this->summarize($lines, $details['district'] ?? null, $methods, $buyer, $coupon, $channel, $point, isset($details['station_id']) ? (int) $details['station_id'] : null);
+            $summary = $this->summarize($lines, $details['district'] ?? null, $methods, $buyer, $coupon, $channel, $point, isset($details['station_id']) ? (int) $details['station_id'] : null, $team);
 
             if ($summary['coupon_error']) {
                 throw new MarketplaceException($summary['coupon_error']);
@@ -329,6 +369,15 @@ class CheckoutService
 
             foreach ($summary['groups'] as $sellerId => $group) {
                 $this->assertDeliverable($group, $methods[$sellerId] ?? null, $details);
+
+                if ($team && ((int) $sellerId !== $team->seller_id || $group['method'] !== DeliveryMethod::Delivery)) {
+                    throw new MarketplaceException("This office order is for food from {$team->seller->shop_name}, delivered to the office. Check out other shops separately.");
+                }
+
+                // Instant food: the exact spot, and an open shop (or a time when it is open).
+                if ($group['seller']->is_instant && $group['method'] === DeliveryMethod::Delivery) {
+                    app(InstantService::class)->assertCanOrder($group['seller'], $point, $deliverAt);
+                }
             }
 
             $checkout = Checkout::create([
@@ -350,6 +399,7 @@ class CheckoutService
                 // No address when the buyer collects (at the shop or at a WiBuy station).
                 $pickup = in_array($group['method'], [DeliveryMethod::Pickup, DeliveryMethod::Station], true);
                 $viaStation = $group['method']->viaStation();
+                $isInstant = $seller->is_instant && $group['method'] === DeliveryMethod::Delivery;
 
                 $order = Order::create([
                     'checkout_id' => $checkout->id,
@@ -358,6 +408,7 @@ class CheckoutService
                     'status' => OrderStatus::PendingPayment,
                     'subtotal' => $group['subtotal'],
                     'delivery_fee' => $group['delivery_fee'],
+                    'shop_paid_delivery' => $group['shop_pays_delivery'],
                     'commission_percent' => $rate,
                     'commission' => Money::percentOf($group['subtotal'], $rate),
                     'total' => $group['total'],
@@ -378,6 +429,9 @@ class CheckoutService
                     'buyer_note' => $details['note'] ?? null,
                     'stock_reserved' => true,
                     'expires_at' => $checkout->expires_at,
+                    'is_instant' => $isInstant,
+                    'deliver_at' => $isInstant ? $deliverAt : null,
+                    'team_order_id' => $team?->id,
                 ]);
 
                 foreach ($group['items'] as $item) {
@@ -498,10 +552,15 @@ class CheckoutService
                 'status' => OrderStatus::Paid,
                 'paid_at' => now(),
                 'expires_at' => null,
-                'accept_by' => now()->addHours(config('wibuy.accept_within_hours')),
+                // Instant food is cooked now: the shop has minutes, not a day, to accept it.
+                'accept_by' => $order->is_instant ? app(InstantService::class)->acceptBy($order) : now()->addHours(config('wibuy.accept_within_hours')),
             ])->save();
 
             $this->sms->send($order->seller->user->phone, SmsMessages::orderPlaced($order));
+
+            if ($order->is_instant) {
+                app(InstantService::class)->onPaid($order);
+            }
             $this->flashDeals->recordSales($order);
         }
 

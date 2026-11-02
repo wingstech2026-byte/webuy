@@ -16,6 +16,9 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
     Route::get('/products', [V1\CatalogController::class, 'products'])->name('products.index');
     Route::get('/products/{product:slug}', [V1\CatalogController::class, 'product'])->name('products.show');
     Route::get('/shops/{seller:slug}', [V1\CatalogController::class, 'shop'])->name('shops.show');
+    // Instant food near a spot, and an office team order (anyone with its link)
+    Route::get('/instant', [V1\InstantController::class, 'nearby'])->middleware('throttle:60,1')->name('instant');
+    Route::get('/team/{teamOrder:token}', [V1\InstantController::class, 'team'])->name('team.show');
 
     // Engagement (Part A): public parts
     Route::get('/lightning-deals', [V1\FlashDealController::class, 'index'])->name('lightning-deals.index');
@@ -36,6 +39,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me', [V1\AuthController::class, 'me'])->name('me');
+        Route::post('/me', [V1\AuthController::class, 'updateMe'])->middleware('throttle:20,1')->name('me.update');
         Route::post('/auth/logout', [V1\AuthController::class, 'logout'])->name('auth.logout');
 
         Route::get('/cart', [V1\CartController::class, 'index'])->name('cart.index');
@@ -52,6 +56,15 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::get('/orders', [V1\OrderController::class, 'index'])->name('orders.index');
         Route::get('/orders/{order}', [V1\OrderController::class, 'show'])->name('orders.show');
         Route::post('/orders/{order}/confirm', [V1\OrderController::class, 'confirm'])->name('orders.confirm');
+        Route::post('/orders/{order}/cancel', [V1\OrderController::class, 'cancel'])->middleware('throttle:10,1')->name('orders.cancel');
+        // Instant food and office team orders
+        Route::post('/team', [V1\InstantController::class, 'startTeam'])->middleware('throttle:10,1')->name('team.store');
+        Route::post('/team/{teamOrder:token}/close', [V1\InstantController::class, 'closeTeam'])->name('team.close');
+        Route::post('/rider/available', [V1\InstantController::class, 'riderAvailable'])->middleware('throttle:20,1')->name('rider.available');
+        Route::post('/orders/{order}/buy-again', [V1\OrderController::class, 'buyAgain'])->middleware('throttle:cart')->name('orders.buy-again');
+        Route::post('/orders/{order}/repeat', [V1\OrderController::class, 'repeat'])->middleware('throttle:10,1')->name('orders.repeat');
+        Route::post('/products/{product:slug}/questions', [V1\QuestionController::class, 'store'])->middleware('throttle:10,1')->name('products.questions.store');
+        Route::post('/orders/{order}/rate-rider', [V1\OrderController::class, 'rateRider'])->middleware('throttle:10,1')->name('orders.rate-rider');
         Route::post('/orders/{order}/review', [V1\OrderController::class, 'review'])->name('orders.review');
 
         Route::get('/wishlist', [V1\WishlistController::class, 'index'])->name('wishlist.index');
@@ -106,7 +119,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::get('/problem-reasons', [V1\DisputeController::class, 'reasons'])->name('disputes.reasons');
         Route::post('/orders/{order}/problem', [V1\DisputeController::class, 'store'])->middleware('throttle:10,1')->name('disputes.store');
         Route::get('/rider/jobs', [V1\RiderController::class, 'jobs'])->name('rider.jobs');
-        Route::post('/rider/jobs/{deliveryJob}/{action}', [V1\RiderController::class, 'act'])->whereIn('action', ['accept', 'release', 'picked-up', 'deliver'])->middleware('throttle:30,1')->name('rider.jobs.act');
+        Route::post('/rider/jobs/{deliveryJob}/{action}', [V1\RiderController::class, 'act'])->whereIn('action', ['accept', 'accept-route', 'release', 'picked-up', 'deliver'])->middleware('throttle:30,1')->name('rider.jobs.act');
         Route::get('/rider/earnings', [V1\RiderController::class, 'earnings'])->name('rider.earnings');
         Route::post('/rider/jobs/{deliveryJob}/location', [V1\RiderController::class, 'location'])->middleware('throttle:20,1')->name('rider.jobs.location');
         Route::post('/rider/payouts', [V1\RiderController::class, 'requestPayout'])->middleware('throttle:10,1')->name('rider.payouts.store');
@@ -145,16 +158,20 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('/dashboard', [V1\SellerController::class, 'dashboard'])->name('dashboard');
             Route::get('/orders', [V1\SellerController::class, 'orders'])->name('orders');
             Route::get('/orders/{order}', [V1\SellerController::class, 'order'])->name('orders.show');
-            Route::post('/orders/{order}/{action}', [V1\SellerController::class, 'act'])->whereIn('action', ['accept', 'reject', 'ship', 'deliver'])->name('orders.act');
+            Route::post('/orders/{order}/{action}', [V1\SellerController::class, 'act'])->whereIn('action', ['accept', 'reject', 'ship', 'deliver', 'food-ready'])->name('orders.act');
             Route::get('/products', [V1\SellerController::class, 'products'])->name('products');
             Route::get('/products/import', [V1\SellerController::class, 'importTemplate'])->name('products.import-template');
             Route::post('/products/import', [V1\SellerController::class, 'import'])->middleware('throttle:10,1')->name('products.import');
             Route::post('/products', [V1\SellerController::class, 'saveProduct'])->middleware('throttle:30,1')->name('products.store');
             Route::post('/products/{product:slug}', [V1\SellerController::class, 'saveProduct'])->middleware('throttle:30,1')->name('products.update');
+            Route::post('/products/{product:slug}/promote', [V1\SellerController::class, 'promote'])->middleware('throttle:10,1')->middleware('shop-owner')->name('products.promote');
             Route::get('/reports', [V1\SellerController::class, 'reports'])->name('reports');
-            Route::get('/earnings', [V1\SellerController::class, 'earnings'])->name('earnings');
-            Route::post('/payouts', [V1\SellerController::class, 'payout'])->middleware('throttle:10,1')->name('payouts');
+            Route::put('/instant', [V1\InstantController::class, 'shopSettings'])->middleware('shop-owner')->name('instant');
+            Route::get('/earnings', [V1\SellerController::class, 'earnings'])->middleware('shop-owner')->name('earnings');
+            Route::post('/payouts', [V1\SellerController::class, 'payout'])->middleware('throttle:10,1')->middleware('shop-owner')->name('payouts');
             Route::get('/rfqs', [V1\SellerController::class, 'rfqs'])->name('rfqs');
+            Route::get('/questions', [V1\QuestionController::class, 'forShop'])->name('questions');
+            Route::post('/questions/{question}/answer', [V1\QuestionController::class, 'answer'])->middleware('throttle:30,1')->name('questions.answer');
             Route::post('/rfqs/{rfq}/quote', [V1\SellerController::class, 'quote'])->middleware('throttle:30,1')->name('rfqs.quote');
             Route::get('/quotes', [V1\SellerController::class, 'quotes'])->name('quotes');
             Route::get('/locations', [V1\SellerController::class, 'locations'])->name('locations');

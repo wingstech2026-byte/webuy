@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AccountDetailsController;
 use App\Http\Controllers\Admin;
 use App\Http\Controllers\AgentInspectionController;
 use App\Http\Controllers\Auth\LoginController;
@@ -15,10 +16,12 @@ use App\Http\Controllers\FarmPageController;
 use App\Http\Controllers\GroupBuyPageController;
 use App\Http\Controllers\GroupPageController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\InstantController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PhotoSearchController;
 use App\Http\Controllers\PriceCutPageController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProductQuestionController;
 use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\RiderController;
 use App\Http\Controllers\Seller;
@@ -26,6 +29,7 @@ use App\Http\Controllers\SellerApplicationController;
 use App\Http\Controllers\ShareLinkController;
 use App\Http\Controllers\ShopController;
 use App\Http\Controllers\StationController;
+use App\Http\Controllers\TeamOrderController;
 use App\Http\Controllers\TrialReviewController;
 use App\Http\Controllers\WebhookController;
 use App\Http\Controllers\WhatsAppWebhookController;
@@ -89,6 +93,9 @@ Route::get('/compare', [CompareController::class, 'index'])->name('compare.index
 Route::post('/compare/clear', [CompareController::class, 'clear'])->name('compare.clear');
 Route::post('/compare/{product:slug}', [CompareController::class, 'toggle'])->middleware('throttle:60,1')->name('compare.toggle');
 Route::get('/group-buys', [GroupBuyPageController::class, 'index'])->name('group-buys.index');
+// Instant food delivery near you, and office team orders (anyone with the link can see it)
+Route::get('/instant', [InstantController::class, 'index'])->middleware('throttle:60,1')->name('instant.index');
+Route::get('/team/{teamOrder:token}', [TeamOrderController::class, 'show'])->name('team.show');
 Route::get('/g/{group:token}', [GroupPageController::class, 'show'])->name('groups.show');
 Route::get('/get-app', [ShareLinkController::class, 'getApp'])->middleware('throttle:30,1')->name('app.get');
 Route::get('/cut/{priceCut:token}', [PriceCutPageController::class, 'show'])->name('price-cuts.show');
@@ -128,7 +135,18 @@ Route::middleware('auth')->group(function () {
     Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
     Route::get('/orders/{order}/tracking', [OrderController::class, 'tracking'])->middleware('throttle:60,1')->name('orders.tracking');
+    Route::get('/account/details', [AccountDetailsController::class, 'edit'])->name('account.details');
+    Route::post('/account/details', [AccountDetailsController::class, 'update'])->middleware('throttle:20,1')->name('account.details.update');
     Route::post('/orders/{order}/confirm', [OrderController::class, 'confirm'])->name('orders.confirm');
+    Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel'])->middleware('throttle:10,1')->name('orders.cancel');
+    Route::post('/team', [TeamOrderController::class, 'store'])->middleware('throttle:10,1')->name('team.store');
+    Route::post('/team/{teamOrder:token}/close', [TeamOrderController::class, 'close'])->name('team.close');
+    Route::post('/rider/available', [RiderController::class, 'available'])->middleware('throttle:20,1')->name('rider.available');
+    Route::post('/orders/{order}/buy-again', [OrderController::class, 'buyAgain'])->middleware('throttle:cart')->name('orders.buy-again');
+    Route::post('/orders/{order}/repeat', [OrderController::class, 'repeat'])->middleware('throttle:10,1')->name('orders.repeat');
+    Route::get('/orders/{order}/receipt', [OrderController::class, 'receipt'])->name('orders.receipt');
+    Route::post('/p/{product:slug}/questions', [ProductQuestionController::class, 'store'])->middleware('throttle:10,1')->name('products.questions.store');
+    Route::post('/orders/{order}/rate-rider', [OrderController::class, 'rateRider'])->middleware('throttle:10,1')->name('orders.rate-rider');
     Route::post('/orders/{order}/review', [OrderController::class, 'review'])->name('orders.review');
     Route::get('/orders/{order}/problem', [DisputeController::class, 'create'])->name('disputes.create');
     Route::post('/orders/{order}/problem', [DisputeController::class, 'store'])->middleware('throttle:10,1')->name('disputes.store');
@@ -139,7 +157,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/search/photo', [PhotoSearchController::class, 'store'])->middleware('throttle:10,1')->name('search.photo.store');
     Route::get('/rider', [RiderController::class, 'index'])->name('rider.index');
     Route::get('/rider/jobs/{deliveryJob}', [RiderController::class, 'show'])->name('rider.jobs.show');
-    Route::post('/rider/jobs/{deliveryJob}/{action}', [RiderController::class, 'act'])->whereIn('action', ['accept', 'release', 'picked-up', 'deliver'])->middleware('throttle:30,1')->name('rider.jobs.act');
+    Route::post('/rider/jobs/{deliveryJob}/{action}', [RiderController::class, 'act'])->whereIn('action', ['accept', 'accept-route', 'release', 'picked-up', 'deliver'])->middleware('throttle:30,1')->name('rider.jobs.act');
     Route::get('/rider/earnings', [RiderController::class, 'earnings'])->name('rider.earnings');
     Route::post('/rider/jobs/{deliveryJob}/location', [RiderController::class, 'location'])->middleware('throttle:20,1')->name('rider.jobs.location');
     // WiBuy pickup stations: the partner's page
@@ -197,23 +215,33 @@ Route::middleware(['auth', 'seller'])->prefix('seller')->name('seller.')->group(
     Route::get('/products/import/example.csv', [Seller\ProductImportController::class, 'template'])->name('products.import.template');
     Route::post('/products/import', [Seller\ProductImportController::class, 'store'])->middleware('throttle:10,1')->name('products.import.store');
     Route::resource('products', Seller\ProductController::class)->except('show');
+    Route::post('/products/{product}/promote', [Seller\ProductController::class, 'promote'])->middleware('throttle:10,1')->middleware('shop-owner')->name('products.promote');
 
     Route::get('/orders', [Seller\OrderController::class, 'index'])->name('orders.index');
     Route::get('/orders/{order}', [Seller\OrderController::class, 'show'])->name('orders.show');
+    Route::get('/orders/{order}/label', [Seller\OrderController::class, 'label'])->name('orders.label');
     Route::post('/orders/{order}/accept', [Seller\OrderController::class, 'accept'])->name('orders.accept');
+    Route::post('/orders/{order}/food-ready', [Seller\OrderController::class, 'foodReady'])->name('orders.food-ready');
     Route::post('/orders/{order}/reject', [Seller\OrderController::class, 'reject'])->name('orders.reject');
     Route::post('/orders/{order}/ship', [Seller\OrderController::class, 'ship'])->name('orders.ship');
     Route::post('/orders/{order}/deliver', [Seller\OrderController::class, 'deliver'])->name('orders.deliver');
 
     Route::get('/reports', Seller\ReportController::class)->name('reports');
-    Route::get('/earnings', [Seller\EarningsController::class, 'index'])->name('earnings');
-    Route::post('/payouts', [Seller\EarningsController::class, 'requestPayout'])->middleware('throttle:10,1')->name('payouts.store');
+    Route::get('/earnings', [Seller\EarningsController::class, 'index'])->middleware('shop-owner')->name('earnings');
+    Route::post('/payouts', [Seller\EarningsController::class, 'requestPayout'])->middleware('throttle:10,1')->middleware('shop-owner')->name('payouts.store');
 
-    Route::get('/shop', [Seller\ShopController::class, 'edit'])->name('shop');
-    Route::put('/shop', [Seller\ShopController::class, 'update'])->name('shop.update');
-    Route::put('/shop/delivery', [Seller\ShopController::class, 'updateDelivery'])->name('shop.delivery');
+    Route::get('/shop', [Seller\ShopController::class, 'edit'])->middleware('shop-owner')->name('shop');
+    Route::put('/shop', [Seller\ShopController::class, 'update'])->middleware('shop-owner')->name('shop.update');
+    Route::put('/shop/instant', [Seller\ShopController::class, 'instant'])->middleware('shop-owner')->name('shop.instant');
+    Route::put('/shop/holiday', [Seller\ShopController::class, 'holiday'])->middleware('shop-owner')->name('shop.holiday');
+    Route::post('/staff', [Seller\StaffController::class, 'store'])->middleware(['shop-owner', 'throttle:10,1'])->name('staff.store');
+    Route::delete('/staff/{user}', [Seller\StaffController::class, 'destroy'])->middleware('shop-owner')->name('staff.destroy');
+    Route::put('/shop/delivery', [Seller\ShopController::class, 'updateDelivery'])->middleware('shop-owner')->name('shop.delivery');
 
     Route::get('/reviews', Seller\ReviewsController::class)->name('reviews');
+    Route::get('/questions', [Seller\QuestionController::class, 'index'])->name('questions.index');
+    Route::post('/questions/{question}/answer', [Seller\QuestionController::class, 'answer'])->middleware('throttle:30,1')->name('questions.answer');
+    Route::post('/questions/{question}/hide', [Seller\QuestionController::class, 'hide'])->name('questions.hide');
 
     // Requests for quotation from buyers
     Route::get('/rfqs', [Seller\RfqController::class, 'index'])->name('rfqs.index');
@@ -252,6 +280,7 @@ Route::middleware(['auth', 'seller'])->prefix('seller')->name('seller.')->group(
 Route::middleware(['auth', 'admin', 'audit'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', Admin\DashboardController::class)->name('dashboard');
     Route::get('/audit', [Admin\AuditLogController::class, 'index'])->name('audit');
+    Route::get('/sales', Admin\AnalyticsController::class)->name('analytics');
     Route::get('/staff', [Admin\StaffController::class, 'index'])->name('staff.index');
     Route::get('/riders', [Admin\RiderController::class, 'index'])->name('riders.index');
     Route::post('/riders/toggle', [Admin\RiderController::class, 'toggle'])->name('riders.toggle');

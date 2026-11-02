@@ -10,6 +10,11 @@ class Cart extends Model
 {
     protected $fillable = ['user_id'];
 
+    protected function casts(): array
+    {
+        return ['reminded_at' => 'datetime', 'items_max_updated_at' => 'datetime'];
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

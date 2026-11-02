@@ -79,6 +79,11 @@ class SearchService
         $reliability = '(select coalesce(sellers.reliability_score, 60) from sellers where sellers.id = products.seller_id)';
         $sort = $filters['sort'] ?? ($q ? 'reliable' : 'newest');
 
+        // Sponsored products that match come first (they are labelled "Sponsored"); price sorts stay honest.
+        if (! in_array($sort, ['price_asc', 'price_desc', 'nearest'], true)) {
+            $query->orderByRaw('case when products.sponsored_until > ? then 0 else 1 end', [now()]);
+        }
+
         match ($sort) {
             'reliable' => $query->orderByRaw("{$reliability} desc")->orderByDesc('products.id'),
             'nearest' => $query->orderByDesc('products.id'),

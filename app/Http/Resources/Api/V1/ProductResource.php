@@ -49,6 +49,8 @@ class ProductResource extends JsonResource
             'min_order_quantity' => $this->min_order_quantity,
             'condition' => $this->condition->value,
             'genuine_guarantee' => (bool) $this->genuine_guarantee,
+            'is_sponsored' => $this->isSponsored(), // shown as "Sponsored"
+            'sponsored_until' => $this->sponsored_until?->toIso8601String(),
             'video_url' => $this->video_url,
             'video_seconds' => $this->video_seconds,
             'is_deal' => $this->is_deal,

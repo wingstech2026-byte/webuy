@@ -14,6 +14,7 @@ use App\Services\RewardService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Validation\Rule;
 
 /** Phone + SMS code login for the mobile app. A successful login returns a Sanctum token. */
 class AuthController extends Controller
@@ -31,7 +32,9 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'We sent a code by SMS.',
             'phone' => $phone,
-            'needs_name' => ! User::where('phone', $phone)->whereNotNull('name')->exists(),
+            'needs_name' => blank(($user = User::where('phone', $phone)->first())?->name),
+            // Where they live (district, town or area): asked at sign-up and from accounts that miss it.
+            'needs_location' => blank($user?->district) || blank($user?->area),
             'expires_in_minutes' => config('wibuy.otp.ttl_minutes'),
             // Local development with the log SMS driver: nothing is really sent, so return the code.
             'dev_code' => app()->environment('local') && config('sms.driver') === 'log' ? $code : null,
@@ -55,6 +58,11 @@ class AuthController extends Controller
             $user->name = trim($request->validated('name'));
         }
 
+        // Where they live, asked at sign-up (and once from accounts that miss it).
+        if ($request->filled('district') && $request->filled('area')) {
+            $user->forceFill(['district' => $request->validated('district'), 'area' => trim($request->validated('area'))]);
+        }
+
         $isNew = ! $user->exists;
         $user->last_login_at = now();
         $user->save();
@@ -64,6 +72,24 @@ class AuthController extends Controller
         $token = $user->createToken($request->validated('device_name') ?: 'WiBuy mobile app')->plainTextToken;
 
         return response()->json(['token' => $token, 'user' => new UserResource($user)]);
+    }
+
+    /** "My details" in the app: name and where they live. */
+    public function updateMe(Request $request): UserResource
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'min:2', 'max:80'],
+            'district' => ['required', Rule::in(config('wibuy.districts'))],
+            'area' => ['required', 'string', 'min:2', 'max:80'],
+        ], [
+            'name.*' => 'Please type your full name.',
+            'district.*' => 'Please choose the district where you live.',
+            'area.*' => 'Please type your town or area, e.g. Lumley or Bo town.',
+        ]);
+
+        $request->user()->forceFill(['name' => trim($data['name']), 'district' => $data['district'], 'area' => trim($data['area'])])->save();
+
+        return new UserResource($request->user());
     }
 
     public function me(Request $request): UserResource

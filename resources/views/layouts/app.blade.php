@@ -42,12 +42,14 @@
                             <span class="ml-0.5 inline-flex min-w-5 justify-center rounded-full bg-amber-400 px-1.5 text-xs font-extrabold text-stone-900">{{ $cartCount > 99 ? '99+' : $cartCount }}</span>
                         @endif
                     </a>
+                    <a href="{{ route('instant.index') }}" class="whitespace-nowrap rounded-lg px-2 py-2 hover:bg-brand-800">⚡ {{ __('Instant') }}</a>
                     <a href="{{ route('orders.index') }}" class="whitespace-nowrap rounded-lg px-2 py-2 hover:bg-brand-800">{{ __('Orders') }}</a>
                     <a href="{{ route('chat.index') }}" class="hidden whitespace-nowrap rounded-lg px-2 py-2 hover:bg-brand-800 sm:inline-block">{{ __('Chat') }} <span data-unread-badge data-url="{{ route('chat.unread') }}" class="{{ ($chatUnread ?? 0) > 0 ? '' : 'hidden' }} ml-0.5 inline-flex min-w-5 justify-center rounded-full bg-red-500 px-1.5 text-xs font-extrabold text-white">{{ ($chatUnread ?? 0) > 99 ? '99+' : ($chatUnread ?? 0) }}</span></a>
                     <details class="relative">
                         <summary class="cursor-pointer list-none whitespace-nowrap rounded-lg px-2 py-2 hover:bg-brand-800" aria-label="{{ __('Menu') }}">{{ __('Menu') }} ▾</summary>
                         <div class="absolute right-0 mt-1 w-56 overflow-hidden rounded-xl bg-white py-1 text-stone-800 shadow-lg ring-1 ring-stone-200">
                             <p class="border-b border-stone-100 px-4 py-2 text-xs text-stone-500">{{ auth()->user()->name ?: auth()->user()->display_phone }}</p>
+                            <a href="{{ route('account.details') }}" class="block px-4 py-3 hover:bg-brand-50">👤 My details</a>
                             <a href="{{ route('wishlist.index') }}" class="block px-4 py-3 hover:bg-brand-50">{{ __('Wishlist') }}</a>
                             <a href="{{ route('compare.index') }}" class="block px-4 py-3 hover:bg-brand-50">{{ __('Compare & recently viewed') }}</a>
                             <a href="{{ route('group-buys.index') }}" class="block px-4 py-3 hover:bg-brand-50">👥 Buy together</a>

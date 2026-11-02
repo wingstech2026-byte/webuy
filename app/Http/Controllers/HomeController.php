@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\RecommendationService;
 use App\Services\SearchService;
+use App\Services\SponsoredProductService;
 use App\Support\BrowsingHistory;
 use Illuminate\Http\Request;
 
@@ -19,6 +20,7 @@ class HomeController extends Controller
             'forYou' => $recommendations->forYou($request->user(), $recent->pluck('id')->all(), 8),
             'categories' => $search->categoryTree(),
             'deals' => $search->deals(),
+            'sponsored' => app(SponsoredProductService::class)->forHome(),
             'featured' => $search->featured(),
             'newArrivals' => $search->newArrivals(),
             'topSellers' => $search->topSellers(),

@@ -12,6 +12,7 @@ use App\Models\Product;
 use App\Models\Seller;
 use App\Services\RecommendationService;
 use App\Services\SearchService;
+use App\Services\SponsoredProductService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -32,6 +33,7 @@ class CatalogController extends Controller
             'categories' => CategoryResource::collection($this->search->categoryTree()),
             'for_you' => ProductResource::collection($recommendations->forYou($user, $viewedIds, 10)),
             'deals' => ProductResource::collection($this->search->deals()),
+            'sponsored' => ProductResource::collection(app(SponsoredProductService::class)->forHome()),
             'featured' => ProductResource::collection($this->search->featured()),
             'new_arrivals' => ProductResource::collection($this->search->newArrivals()),
             'top_sellers' => SellerResource::collection($this->search->topSellers()),
@@ -92,6 +94,8 @@ class CatalogController extends Controller
             'data' => (new ProductResource($product))->detailed(),
             'also_bought' => ProductResource::collection($recommendations->alsoBought($product, 6)),
             'reviews' => ReviewResource::collection($product->reviews()->with('buyer', 'images')->limit(10)->get()),
+            'questions' => $product->questions()->public()->latest('answered_at')->limit(10)->get()
+                ->map(fn ($q) => ['question' => $q->question, 'answer' => $q->answer, 'answered_at' => $q->answered_at?->toIso8601String()])->values(),
         ]);
     }
 

@@ -34,6 +34,28 @@
             <span class="badge {{ $order->status->badge() }} text-sm">{{ $order->statusLabel() }}</span>
         </div>
 
+        @if ($order->is_instant)
+            <p class="rounded-lg bg-amber-50 p-3 text-amber-900">⚡ Instant food{{ $order->deliver_at ? ', delivery at '.$order->deliver_at->format('D j M, H:i') : '' }}.
+                {{ $order->food_ready_at ? 'The food is ready: a WiBuy rider is bringing it.' : 'The shop cooks it once it accepts.' }}</p>
+        @endif
+
+        @if ($isBuyer && $order->paid_at)
+            <div class="flex flex-wrap items-center gap-2">
+                <form method="POST" action="{{ route('orders.buy-again', $order) }}">@csrf <button class="btn btn-primary btn-sm">🔁 Buy again</button></form>
+                <a href="{{ route('orders.receipt', $order) }}" target="_blank" class="btn btn-outline btn-sm">🧾 Receipt</a>
+                <form method="POST" action="{{ route('orders.repeat', $order) }}" class="flex items-center gap-1">
+                    @csrf
+                    <label for="every_days" class="text-sm text-stone-600">Remind me to order again</label>
+                    <select id="every_days" name="every_days" class="input !w-auto !py-1 text-sm" onchange="this.form.submit()">
+                        <option value="0">Never</option>
+                        @foreach (\App\Services\BuyAgainService::REPEAT_DAYS as $days)
+                            <option value="{{ $days }}" @selected($order->repeat?->is_active && $order->repeat->every_days === $days)>every {{ $days }} days</option>
+                        @endforeach
+                    </select>
+                </form>
+            </div>
+        @endif
+
         @if ($sideNote)
             <div class="card border-amber-300 bg-amber-50 p-4 text-amber-900">
                 <p class="font-bold">{{ $sideNote[0] }}</p>
@@ -44,6 +66,13 @@
             </div>
         @endif
 
+        @if ($order->status === OrderStatus::Paid && ! $order->groupParticipant()->exists() && ! $order->milestones()->exists())
+            <form method="POST" action="{{ route('orders.cancel', $order) }}" class="card flex flex-wrap items-center justify-between gap-2 p-4" onsubmit="return confirm('Cancel this order? Your money comes back to your mobile money.')">
+                @csrf
+                <p class="text-sm">Changed your mind? You can cancel until the shop accepts. You get all your money back.</p>
+                <button class="btn btn-outline btn-sm">Cancel my order</button>
+            </form>
+        @endif
         {{-- Timeline --}}
         <ol class="card space-y-3 p-4" aria-label="Order progress">
             @foreach ($steps as [$label, $at])
@@ -67,6 +96,21 @@
                         <li class="badge {{ $step['at'] ? 'bg-brand-100 text-brand-800' : 'bg-stone-100 text-stone-500' }}">{{ $step['at'] ? '✓' : '·' }} {{ $step['label'] }}</li>
                     @endforeach
                 </ol>
+                @if ($rider['can_rate'])
+                    <form method="POST" action="{{ route('orders.rate-rider', $order) }}" class="mt-3 space-y-2 rounded-lg bg-brand-50 p-3">
+                        @csrf
+                        <p class="text-sm font-bold">How was {{ $rider['rider_name'] }}?</p>
+                        <div class="flex flex-wrap gap-2">
+                            @for ($i = 5; $i >= 1; $i--)
+                                <label class="choice min-h-10 px-3 text-sm"><input type="radio" name="stars" value="{{ $i }}" required class="size-4 accent-brand-700">{{ str_repeat('★', $i) }}</label>
+                            @endfor
+                        </div>
+                        <input name="comment" maxlength="300" class="input" placeholder="Anything to say? (optional)">
+                        <button class="btn btn-primary btn-sm">Rate the rider</button>
+                    </form>
+                @elseif ($rider['rating'])
+                    <p class="mt-2 text-sm">You gave the rider {{ str_repeat('★', $rider['rating']) }}. Thank you!</p>
+                @endif
                 @if ($rider['stage'] === \App\Models\DeliveryJob::PICKED_UP)
                     {{-- Live: where the rider is, how far and how long. Refreshes every 20 seconds. --}}
                     <div class="mt-3" data-tracking data-url="{{ route('orders.tracking', $order) }}">

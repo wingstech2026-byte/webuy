@@ -24,10 +24,28 @@
 
             @if ($needsName)
                 <div>
-                    <label for="name" class="label">Your name</label>
+                    <label for="name" class="label">Your full name</label>
                     <input id="name" name="name" type="text" autocomplete="name" required maxlength="80"
                            value="{{ old('name') }}" placeholder="e.g. Aminata Kamara" class="input">
                     @error('name') <p class="field-error">{{ $message }}</p> @enderror
+                </div>
+            @endif
+            @if ($needsLocation)
+                {{-- Where the buyer lives: shops and riders know which area to serve. --}}
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <div>
+                        <label for="district" class="label">Your district</label>
+                        <select id="district" name="district" required class="input">
+                            <option value="">Choose…</option>
+                            @foreach ($districts as $d) <option value="{{ $d }}" @selected(old('district') === $d)>{{ $d }}</option> @endforeach
+                        </select>
+                        @error('district') <p class="field-error">{{ $message }}</p> @enderror
+                    </div>
+                    <div>
+                        <label for="area" class="label">Town or area</label>
+                        <input id="area" name="area" required maxlength="80" value="{{ old('area') }}" placeholder="e.g. Lumley, Bo town" class="input">
+                        @error('area') <p class="field-error">{{ $message }}</p> @enderror
+                    </div>
                 </div>
             @endif
 

@@ -243,5 +243,10 @@ class StationService
 
         $this->sms->send($order->buyer->phone, "WiBuy: Your order {$order->number} is ready at {$station->name}, {$station->address}"
             .($station->opening_hours ? " ({$station->opening_hours})" : '').". Show this code to collect it: {$code}");
+
+        // Ordered for family or a friend: the person collecting it needs the code.
+        if ($order->recipientIsSomeoneElse()) {
+            $this->sms->send($order->recipient_phone, "WiBuy: {$order->buyer->name} sent you order {$order->number}. Collect it at {$station->name}, {$station->address}. Show this code: {$code}");
+        }
     }
 }

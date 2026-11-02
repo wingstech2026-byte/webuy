@@ -105,6 +105,10 @@ class CartService
             return 'No longer available';
         }
 
+        if ($product->seller->isOnHoliday()) {
+            return 'The shop is closed until '.$product->seller->holiday_until->format('j M');
+        }
+
         if ($variant === null && $product->hasVariants()) {
             return 'Choose a size or option';
         }
