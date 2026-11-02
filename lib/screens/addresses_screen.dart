@@ -96,6 +96,8 @@ class _AddressFormScreenState extends State<AddressFormScreen> {
   late final _street = TextEditingController(text: widget.address?.street);
   late final _landmark = TextEditingController(text: widget.address?.landmark);
   late final _directions = TextEditingController(text: widget.address?.directions);
+  late final _building = TextEditingController(text: widget.address?.building);
+  late final _floor = TextEditingController(text: widget.address?.floor);
   late final _point = TextEditingController(
       text: widget.address?.hasPin == true ? '${widget.address!.latitude}, ${widget.address!.longitude}' : '');
   late String _district = widget.address?.district ?? 'Western Area Urban';
@@ -114,7 +116,7 @@ class _AddressFormScreenState extends State<AddressFormScreen> {
 
   @override
   void dispose() {
-    for (final c in [_label, _name, _phone, _town, _neighbourhood, _street, _landmark, _directions, _point]) {
+    for (final c in [_label, _name, _phone, _town, _neighbourhood, _street, _landmark, _directions, _point, _building, _floor]) {
       c.dispose();
     }
     super.dispose();
@@ -137,6 +139,8 @@ class _AddressFormScreenState extends State<AddressFormScreen> {
       'street': _street.text.trim(),
       'landmark': _landmark.text.trim(),
       'directions': _directions.text.trim(),
+      'building': _building.text.trim(),
+      'floor': _floor.text.trim(),
       'latitude': point?.$1,
       'longitude': point?.$2,
       'is_default': _isDefault,
@@ -181,6 +185,12 @@ class _AddressFormScreenState extends State<AddressFormScreen> {
         TextField(controller: _neighbourhood, decoration: const InputDecoration(labelText: 'Area / neighbourhood')),
         const SizedBox(height: 10),
         TextField(controller: _street, decoration: const InputDecoration(labelText: 'Street (if it has a name)')),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(child: TextField(controller: _building, decoration: const InputDecoration(labelText: 'Building (offices)', hintText: 'Africell House'))),
+          const SizedBox(width: 8),
+          SizedBox(width: 100, child: TextField(controller: _floor, decoration: const InputDecoration(labelText: 'Floor'))),
+        ]),
         const SizedBox(height: 10),
         TextField(controller: _landmark, decoration: const InputDecoration(labelText: 'Landmark', hintText: 'Opposite the Total filling station')),
         const SizedBox(height: 10),

@@ -21,6 +21,8 @@ class SavedAddress {
     this.directions,
     this.latitude,
     this.longitude,
+    this.building,
+    this.floor,
   });
 
   factory SavedAddress.fromJson(Map<String, dynamic> j) => SavedAddress(
@@ -37,6 +39,8 @@ class SavedAddress {
         latitude: _d(j['latitude']),
         longitude: _d(j['longitude']),
         oneLine: _s(j['one_line']),
+        building: j['building'] as String?,
+        floor: j['floor'] as String?,
         isDefault: j['is_default'] == true,
       );
 
@@ -50,6 +54,10 @@ class SavedAddress {
   final String? street;
   final String? landmark;
   final String? directions;
+
+  /// Offices: the building and floor, so the rider finds the right desk.
+  final String? building;
+  final String? floor;
   final double? latitude;
   final double? longitude;
   final String oneLine;

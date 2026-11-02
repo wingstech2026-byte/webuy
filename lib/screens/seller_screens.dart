@@ -34,34 +34,69 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
       appBar: AppBar(title: const Text('My shop')),
       body: Loader<Map<String, dynamic>>(
         key: ValueKey(_reload),
-        load: () async => await api.get('/seller/dashboard') as Map<String, dynamic>,
+        load: () async =>
+            await api.get('/seller/dashboard') as Map<String, dynamic>,
         builder: (context, d, reload) {
           final counts = d['counts'] as Map<String, dynamic>;
-          final money = d['money'] as Map<String, dynamic>;
+          // Null for shop helpers: they manage orders and products, not the money.
+          final money = d['money'] as Map<String, dynamic>?;
 
           return RefreshIndicator(
             onRefresh: reload,
             child: ListView(padding: const EdgeInsets.all(12), children: [
-              Text(d['shop_name'] as String, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
-              Text('Delivery reliability: ${d['reliability_score'] ?? 'new shop'}${d['reliability_score'] != null ? '/100' : ''}', style: const TextStyle(color: WiBuyColors.muted)),
+              Text(d['shop_name'] as String,
+                  style: const TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.w900)),
+              Text(
+                  'Delivery reliability: ${d['reliability_score'] ?? 'new shop'}${d['reliability_score'] != null ? '/100' : ''}',
+                  style: const TextStyle(color: WiBuyColors.muted)),
+              if (d['is_owner'] == false)
+                const Text('You are a helper in this shop.',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
               const SizedBox(height: 10),
-              Card(
-                color: WiBuyColors.green,
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Row(children: [
-                    Expanded(child: _Money('Available', money['available'] as String, white: true)),
-                    Expanded(child: _Money('On hold', money['pending'] as String, white: true)),
-                  ]),
+              if (money != null)
+                Card(
+                  color: WiBuyColors.green,
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(children: [
+                      Expanded(
+                          child: _Money(
+                              'Available', money['available'] as String,
+                              white: true)),
+                      Expanded(
+                          child: _Money('On hold', money['pending'] as String,
+                              white: true)),
+                    ]),
+                  ),
                 ),
-              ),
               const SizedBox(height: 10),
-              _Tile(Icons.receipt_long, 'Orders', '${counts['new']} new · ${counts['accepted']} to ship', () => _open(const SellerOrdersScreen())),
-              _Tile(Icons.inventory_2_outlined, 'Products', '${d['product_count']} products${(d['low_stock'] as List).isNotEmpty ? ' · ${(d['low_stock'] as List).length} low on stock' : ''}',
+              _Tile(
+                  Icons.receipt_long,
+                  'Orders',
+                  '${counts['new']} new · ${counts['accepted']} to ship',
+                  () => _open(const SellerOrdersScreen())),
+              _Tile(
+                  Icons.inventory_2_outlined,
+                  'Products',
+                  '${d['product_count']} products${(d['low_stock'] as List).isNotEmpty ? ' · ${(d['low_stock'] as List).length} low on stock' : ''}',
                   () => _open(const SellerProductsScreen())),
-              _Tile(Icons.bar_chart, 'Sales report', 'Best sellers, sales by week, low stock', () => _open(const SellerReportScreen())),
-              _Tile(Icons.payments_outlined, 'Earnings and payouts', 'Available ${formatLe(money['available'] as String)}', () => _open(const SellerEarningsScreen())),
-              _Tile(Icons.request_quote_outlined, 'Quote requests', '${d['open_rfqs']} open request(s) from buyers', () => _open(const SellerRfqsScreen())),
+              _Tile(
+                  Icons.bar_chart,
+                  'Sales report',
+                  'Best sellers, sales by week, low stock',
+                  () => _open(const SellerReportScreen())),
+              if (money != null)
+                _Tile(
+                    Icons.payments_outlined,
+                    'Earnings and payouts',
+                    'Available ${formatLe(money['available'] as String)}',
+                    () => _open(const SellerEarningsScreen())),
+              _Tile(
+                  Icons.request_quote_outlined,
+                  'Quote requests',
+                  '${d['open_rfqs']} open request(s) from buyers',
+                  () => _open(const SellerRfqsScreen())),
             ]),
           );
         },
@@ -78,9 +113,16 @@ class _Money extends StatelessWidget {
   final bool white;
 
   @override
-  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: TextStyle(color: white ? Colors.white70 : WiBuyColors.muted)),
-        Text(formatLe(amount), style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: white ? Colors.white : WiBuyColors.text)),
+  Widget build(BuildContext context) =>
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label,
+            style:
+                TextStyle(color: white ? Colors.white70 : WiBuyColors.muted)),
+        Text(formatLe(amount),
+            style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: white ? Colors.white : WiBuyColors.text)),
       ]);
 }
 
@@ -96,7 +138,8 @@ class _Tile extends StatelessWidget {
   Widget build(BuildContext context) => Card(
         child: ListTile(
           leading: Icon(icon, color: WiBuyColors.green),
-          title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+          title:
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
           subtitle: Text(subtitle),
           trailing: const Icon(Icons.chevron_right),
           onTap: onTap,
@@ -123,10 +166,18 @@ class _SellerReportScreenState extends State<SellerReportScreen> {
         child: Card(
           child: Padding(
             padding: const EdgeInsets.all(10),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(label, style: const TextStyle(color: WiBuyColors.muted, fontSize: 12)),
-              Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
-              if (note != null) Text(note, style: const TextStyle(color: WiBuyColors.muted, fontSize: 11)),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label,
+                  style:
+                      const TextStyle(color: WiBuyColors.muted, fontSize: 12)),
+              Text(value,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w900, fontSize: 17)),
+              if (note != null)
+                Text(note,
+                    style: const TextStyle(
+                        color: WiBuyColors.muted, fontSize: 11)),
             ]),
           ),
         ),
@@ -134,7 +185,8 @@ class _SellerReportScreenState extends State<SellerReportScreen> {
 
   Widget _heading(String text) => Padding(
         padding: const EdgeInsets.fromLTRB(2, 16, 2, 6),
-        child: Text(text, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+        child: Text(text,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
       );
 
   static double _amount(Object? value) => double.tryParse('$value') ?? 0;
@@ -144,36 +196,60 @@ class _SellerReportScreenState extends State<SellerReportScreen> {
         appBar: AppBar(title: const Text('Sales report')),
         body: Loader<Map<String, dynamic>>(
           key: ValueKey(_days),
-          load: () async => await SessionScope.read(context).api.get('/seller/reports', query: {'days': '$_days'}) as Map<String, dynamic>,
+          load: () async => await SessionScope.read(context)
+                  .api
+                  .get('/seller/reports', query: {'days': '$_days'})
+              as Map<String, dynamic>,
           builder: (context, r, reload) {
             final t = r['totals'] as Map<String, dynamic>;
-            final weeks = (r['weeks'] as List).whereType<Map<String, dynamic>>().toList();
-            final best = (r['best_sellers'] as List).whereType<Map<String, dynamic>>().toList();
-            final low = (r['low_stock'] as List).whereType<Map<String, dynamic>>().toList();
-            final peak = weeks.map((w) => _amount(w['sales'])).fold<double>(1, (m, v) => v > m ? v : m);
+            final weeks =
+                (r['weeks'] as List).whereType<Map<String, dynamic>>().toList();
+            final best = (r['best_sellers'] as List)
+                .whereType<Map<String, dynamic>>()
+                .toList();
+            final low = (r['low_stock'] as List)
+                .whereType<Map<String, dynamic>>()
+                .toList();
+            final peak = weeks
+                .map((w) => _amount(w['sales']))
+                .fold<double>(1, (m, v) => v > m ? v : m);
             final before = _amount(r['previous_sales']);
-            final change = before == 0 ? null : ((_amount(t['sales']) - before) / before * 100).round();
+            final change = before == 0
+                ? null
+                : ((_amount(t['sales']) - before) / before * 100).round();
 
             return RefreshIndicator(
               onRefresh: reload,
               child: ListView(padding: const EdgeInsets.all(12), children: [
                 SegmentedButton<int>(
-                  segments: [for (final e in _periods.entries) ButtonSegment(value: e.key, label: Text(e.value))],
+                  segments: [
+                    for (final e in _periods.entries)
+                      ButtonSegment(value: e.key, label: Text(e.value))
+                  ],
                   selected: {_days},
                   onSelectionChanged: (s) => setState(() => _days = s.first),
                 ),
                 const SizedBox(height: 8),
                 Row(children: [
-                  _stat('Sales', formatLe(t['sales'] as String), change == null ? null : '${change >= 0 ? '▲' : '▼'} ${change.abs()}% on the $_days days before'),
-                  _stat('You keep', formatLe(t['kept'] as String), 'After commission'),
+                  _stat(
+                      'Sales',
+                      formatLe(t['sales'] as String),
+                      change == null
+                          ? null
+                          : '${change >= 0 ? '▲' : '▼'} ${change.abs()}% on the $_days days before'),
+                  _stat('You keep', formatLe(t['kept'] as String),
+                      'After commission'),
                 ]),
                 Row(children: [
-                  _stat('Orders', '${t['orders']}', 'Average ${formatLe(t['average_order'] as String)}'),
+                  _stat('Orders', '${t['orders']}',
+                      'Average ${formatLe(t['average_order'] as String)}'),
                   _stat('Items sold', '${t['items_sold']}'),
                 ]),
                 Row(children: [
-                  _stat('Buyers', '${t['buyers']}', '${t['repeat_buyers']} came back'),
-                  _stat('Lost orders', '${t['lost_orders']}', 'Refused, cancelled, refunded'),
+                  _stat('Buyers', '${t['buyers']}',
+                      '${t['repeat_buyers']} came back'),
+                  _stat('Lost orders', '${t['lost_orders']}',
+                      'Refused, cancelled, refunded'),
                 ]),
                 _heading('Sales week by week'),
                 Card(
@@ -181,51 +257,81 @@ class _SellerReportScreenState extends State<SellerReportScreen> {
                     padding: const EdgeInsets.fromLTRB(10, 14, 10, 8),
                     child: SizedBox(
                       height: 150,
-                      child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                        for (final w in weeks)
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 3),
-                              child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
-                                Flexible(
-                                  child: FractionallySizedBox(
-                                    heightFactor: (_amount(w['sales']) / peak).clamp(0.02, 1.0),
-                                    child: Tooltip(
-                                      message: '${formatLe(w['sales'] as String)} · ${w['orders']} orders',
-                                      child: Container(
-                                        decoration: const BoxDecoration(color: WiBuyColors.green, borderRadius: BorderRadius.vertical(top: Radius.circular(4))),
-                                      ),
-                                    ),
-                                  ),
+                      child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            for (final w in weeks)
+                              Expanded(
+                                child: Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 3),
+                                  child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      children: [
+                                        Flexible(
+                                          child: FractionallySizedBox(
+                                            heightFactor:
+                                                (_amount(w['sales']) / peak)
+                                                    .clamp(0.02, 1.0),
+                                            child: Tooltip(
+                                              message:
+                                                  '${formatLe(w['sales'] as String)} · ${w['orders']} orders',
+                                              child: Container(
+                                                decoration: const BoxDecoration(
+                                                    color: WiBuyColors.green,
+                                                    borderRadius:
+                                                        BorderRadius.vertical(
+                                                            top:
+                                                                Radius.circular(
+                                                                    4))),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(w['label'] as String,
+                                            style: const TextStyle(
+                                                fontSize: 9,
+                                                color: WiBuyColors.muted),
+                                            maxLines: 1),
+                                      ]),
                                 ),
-                                const SizedBox(height: 4),
-                                Text(w['label'] as String, style: const TextStyle(fontSize: 9, color: WiBuyColors.muted), maxLines: 1),
-                              ]),
-                            ),
-                          ),
-                      ]),
+                              ),
+                          ]),
                     ),
                   ),
                 ),
                 _heading('Best sellers'),
-                if (best.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(14), child: Text('No sales in this period yet.'))),
+                if (best.isEmpty)
+                  const Card(
+                      child: Padding(
+                          padding: EdgeInsets.all(14),
+                          child: Text('No sales in this period yet.'))),
                 for (final (i, b) in best.indexed)
                   Card(
                     child: ListTile(
                       dense: true,
                       title: Text('${i + 1}. ${b['title']}'),
                       subtitle: Text(formatLe(b['sales'] as String)),
-                      trailing: Text('${b['quantity']} sold', style: const TextStyle(fontWeight: FontWeight.w800)),
+                      trailing: Text('${b['quantity']} sold',
+                          style: const TextStyle(fontWeight: FontWeight.w800)),
                     ),
                   ),
                 _heading('Running low'),
-                if (low.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(14), child: Text('All your live products have more than 5 in stock.'))),
+                if (low.isEmpty)
+                  const Card(
+                      child: Padding(
+                          padding: EdgeInsets.all(14),
+                          child: Text(
+                              'All your live products have more than 5 in stock.'))),
                 for (final p in low)
                   Card(
                     child: ListTile(
                       dense: true,
                       title: Text(p['title'] as String),
-                      trailing: StatusChip(p['stock'] == 0 ? 'Sold out' : '${p['stock']} left', status: p['stock'] == 0 ? 'cancelled' : 'paid'),
+                      trailing: StatusChip(
+                          p['stock'] == 0 ? 'Sold out' : '${p['stock']} left',
+                          status: p['stock'] == 0 ? 'cancelled' : 'paid'),
                     ),
                   ),
               ]),
@@ -245,7 +351,14 @@ class SellerOrdersScreen extends StatefulWidget {
 }
 
 class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
-  static const _tabs = {'new': 'New', 'accepted': 'To ship', 'shipped': 'Shipped', 'delivered': 'Delivered', 'problems': 'Problems', 'finished': 'Finished'};
+  static const _tabs = {
+    'new': 'New',
+    'accepted': 'To ship',
+    'shipped': 'Shipped',
+    'delivered': 'Delivered',
+    'problems': 'Problems',
+    'finished': 'Finished'
+  };
   String _tab = 'new';
   int _reload = 0;
 
@@ -258,30 +371,45 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
       body: Column(children: [
         SizedBox(
           height: 52,
-          child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), children: [
-            for (final e in _tabs.entries)
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: ChoiceChip(label: Text(e.value), selected: _tab == e.key, onSelected: (_) => setState(() => _tab = e.key)),
-              ),
-          ]),
+          child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              children: [
+                for (final e in _tabs.entries)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                        label: Text(e.value),
+                        selected: _tab == e.key,
+                        onSelected: (_) => setState(() => _tab = e.key)),
+                  ),
+              ]),
         ),
         Expanded(
           child: Loader<List<Order>>(
             key: ValueKey('$_tab$_reload'),
-            load: () async => Paged.fromJson(await api.get('/seller/orders', query: {'tab': _tab}) as Map<String, dynamic>, Order.fromJson).items,
+            load: () async => Paged.fromJson(
+                    await api.get('/seller/orders', query: {'tab': _tab})
+                        as Map<String, dynamic>,
+                    Order.fromJson)
+                .items,
             builder: (context, orders, reload) => orders.isEmpty
-                ? const EmptyState(icon: Icons.receipt_long_outlined, title: 'No orders here.')
+                ? const EmptyState(
+                    icon: Icons.receipt_long_outlined, title: 'No orders here.')
                 : ListView(padding: const EdgeInsets.all(12), children: [
                     for (final o in orders)
                       Card(
                         child: ListTile(
-                          title: Text('${o.number} · ${formatLe(o.total)}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                          subtitle: Text('${o.items.map((i) => '${i.quantity} × ${i.displayTitle}').join(', ')}\n${o.isPickup ? 'Pickup' : 'Delivery to ${o.district ?? ''}'}'),
+                          title: Text('${o.number} · ${formatLe(o.total)}',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700)),
+                          subtitle: Text(
+                              '${o.items.map((i) => '${i.quantity} × ${i.displayTitle}').join(', ')}\n${o.isPickup ? 'Pickup' : 'Delivery to ${o.district ?? ''}'}'),
                           isThreeLine: true,
                           trailing: StatusChip(o.statusLabel, status: o.status),
                           onTap: () async {
-                            await Navigator.of(context).push(MaterialPageRoute(builder: (_) => SellerOrderScreen(id: o.id)));
+                            await Navigator.of(context).push(MaterialPageRoute(
+                                builder: (_) => SellerOrderScreen(id: o.id)));
                             setState(() => _reload++);
                           },
                         ),
@@ -310,7 +438,9 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
   Future<void> _act(String action, {String? reason}) async {
     setState(() => _busy = true);
     try {
-      await SessionScope.read(context).api.post('/seller/orders/${widget.id}/$action', {if (reason != null) 'reason': reason});
+      await SessionScope.read(context).api.post(
+          '/seller/orders/${widget.id}/$action',
+          {if (reason != null) 'reason': reason});
       if (mounted) showMessage(context, 'Done. The buyer was told by SMS.');
     } on Object catch (e) {
       if (mounted) showMessage(context, e);
@@ -325,10 +455,13 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
   }
 
   /// A buyer's return: accept (with how to send it back), refuse (WiBuy decides), or confirm it came back.
-  Future<void> _returnAct(int returnId, String action, Map<String, dynamic> body, String done) async {
+  Future<void> _returnAct(int returnId, String action,
+      Map<String, dynamic> body, String done) async {
     setState(() => _busy = true);
     try {
-      await SessionScope.read(context).api.post('/seller/returns/$returnId/$action', body);
+      await SessionScope.read(context)
+          .api
+          .post('/seller/returns/$returnId/$action', body);
       if (mounted) showMessage(context, done);
     } on Object catch (e) {
       if (mounted) showMessage(context, e);
@@ -346,18 +479,23 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
     final id = (r['id'] as num).toInt();
     return [
       const Divider(height: 28),
-      Text('↩️ Return: ${r['status_label']}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+      Text('↩️ Return: ${r['status_label']}',
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
       Text('${r['items']} · ${r['reason']}'),
       Text('Refund to the buyer: ${formatLe(r['refund_amount'] as String?)}'),
-      if (r['return_instructions'] != null) Text('You told the buyer: ${r['return_instructions']}'),
+      if (r['return_instructions'] != null)
+        Text('You told the buyer: ${r['return_instructions']}'),
       const SizedBox(height: 8),
       if (r['status'] == 'requested') ...[
         FilledButton(
           onPressed: _busy
               ? null
               : () async {
-                  final how = await _ask('How should the buyer send it back?', 'Bring it to the shop, or our rider collects it');
-                  if (how != null && how.length >= 5) await _returnAct(id, 'accept', {'instructions': how}, 'Return accepted. The buyer was told how to send it back.');
+                  final how = await _ask('How should the buyer send it back?',
+                      'Bring it to the shop, or our rider collects it');
+                  if (how != null && how.length >= 5)
+                    await _returnAct(id, 'accept', {'instructions': how},
+                        'Return accepted. The buyer was told how to send it back.');
                 },
           child: const Text('Accept the return'),
         ),
@@ -366,15 +504,21 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
           onPressed: _busy
               ? null
               : () async {
-                  final why = await _ask('Why do you refuse? (WiBuy decides)', 'It was fine when it left the shop');
-                  if (why != null && why.length >= 5) await _returnAct(id, 'refuse', {'note': why}, 'Refused. The WiBuy team will decide.');
+                  final why = await _ask('Why do you refuse? (WiBuy decides)',
+                      'It was fine when it left the shop');
+                  if (why != null && why.length >= 5)
+                    await _returnAct(id, 'refuse', {'note': why},
+                        'Refused. The WiBuy team will decide.');
                 },
           child: const Text('Refuse'),
         ),
       ],
       if (r['status'] == 'accepted')
         FilledButton(
-          onPressed: _busy ? null : () => _returnAct(id, 'received', {}, 'Thanks. The stock is back and the buyer is being refunded.'),
+          onPressed: _busy
+              ? null
+              : () => _returnAct(id, 'received', {},
+                  'Thanks. The stock is back and the buyer is being refunded.'),
           child: const Text('I have the items back'),
         ),
     ];
@@ -386,10 +530,17 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(title),
-        content: TextField(controller: text, maxLength: 200, decoration: InputDecoration(hintText: hint)),
+        content: TextField(
+            controller: text,
+            maxLength: 200,
+            decoration: InputDecoration(hintText: hint)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, text.text.trim()), child: const Text('OK')),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, text.text.trim()),
+              child: const Text('OK')),
         ],
       ),
     );
@@ -403,53 +554,100 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
       appBar: AppBar(title: const Text('Shop order')),
       body: Loader<Map<String, dynamic>>(
         key: ValueKey(_reload),
-        load: () async => await api.get('/seller/orders/${widget.id}') as Map<String, dynamic>,
+        load: () async => await api.get('/seller/orders/${widget.id}')
+            as Map<String, dynamic>,
         builder: (context, json, _) {
           final order = Order.fromJson(json['data'] as Map<String, dynamic>);
           final buyer = json['buyer'] as Map<String, dynamic>;
 
           return ListView(padding: const EdgeInsets.all(14), children: [
             Row(children: [
-              Expanded(child: Text(order.number, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900))),
+              Expanded(
+                  child: Text(order.number,
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w900))),
               StatusChip(order.statusLabel, status: order.status),
             ]),
             const SizedBox(height: 8),
-            for (final item in order.items) Text('${item.quantity} × ${item.displayTitle} @ ${formatLe(item.unitPrice)}'),
+            for (final item in order.items)
+              Text(
+                  '${item.quantity} × ${item.displayTitle} @ ${formatLe(item.unitPrice)}'),
             const Divider(),
-            Text('Buyer: ${buyer['name']} · ${displayPhone(buyer['phone'] as String?)}'),
-            Text(order.isPickup ? 'Pickup at your shop' : 'Deliver to: ${[order.address, order.district].whereType<String>().join(', ')}'),
-            if (order.giftNote != null) Text('🎁 Include: ${order.giftNote}', style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text(
+                'Buyer: ${buyer['name']} · ${displayPhone(buyer['phone'] as String?)}'),
+            Text(order.isPickup
+                ? 'Pickup at your shop'
+                : 'Deliver to: ${[
+                    order.address,
+                    order.district
+                  ].whereType<String>().join(', ')}'),
+            if (order.giftNote != null)
+              Text('🎁 Include: ${order.giftNote}',
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 6),
-            Text('You receive ${formatLe(json['earnings'] as String)} after the buyer confirms.', style: const TextStyle(color: WiBuyColors.green, fontWeight: FontWeight.w700)),
+            Text(
+                'You receive ${formatLe(json['earnings'] as String)} after the buyer confirms.',
+                style: const TextStyle(
+                    color: WiBuyColors.green, fontWeight: FontWeight.w700)),
             if (order.milestonesJson.isNotEmpty)
-              Text(order.milestonesJson.map(MilestoneInfo.fromJson).map((m) => '${m.label}: ${m.isPaid ? 'paid' : 'not paid yet'}').join(' · ')),
+              Text(order.milestonesJson
+                  .map(MilestoneInfo.fromJson)
+                  .map((m) =>
+                      '${m.label}: ${m.isPaid ? 'paid' : 'not paid yet'}')
+                  .join(' · ')),
             const SizedBox(height: 16),
             if (json['can_accept'] == true) ...[
-              FilledButton(onPressed: _busy ? null : () => _act('accept'), child: const Text('Accept order')),
+              FilledButton(
+                  onPressed: _busy ? null : () => _act('accept'),
+                  child: const Text('Accept order')),
               const SizedBox(height: 8),
               OutlinedButton(
                 onPressed: _busy
                     ? null
                     : () async {
-                        final reason = await _ask('Why can you not fulfil it?', 'Out of stock');
-                        if (reason != null && reason.isNotEmpty) await _act('reject', reason: reason);
+                        final reason = await _ask(
+                            'Why can you not fulfil it?', 'Out of stock');
+                        if (reason != null && reason.isNotEmpty)
+                          await _act('reject', reason: reason);
                       },
                 child: const Text('Reject (the buyer is refunded)'),
               ),
+            ],
+            if ((json['data'] as Map<String, dynamic>)['is_instant'] == true)
+              Text((json['data'] as Map<String, dynamic>)['deliver_at'] == null ? '⚡ Instant food: cook it now' : '⚡ Instant food: deliver at ${DateTime.tryParse((json['data'] as Map<String, dynamic>)['deliver_at'] as String)?.toLocal().toString().substring(0, 16)}',
+                  style: const TextStyle(color: WiBuyColors.orange, fontWeight: FontWeight.w800)),
+            if ((json['data'] as Map<String, dynamic>)['can_mark_food_ready'] == true) ...[
+              FilledButton.icon(
+                  onPressed: _busy ? null : () => _act('food-ready'),
+                  icon: const Icon(Icons.delivery_dining),
+                  label: const Text('Food ready: call a WiBuy rider')),
+              const SizedBox(height: 8),
             ],
             if (json['can_ship'] == true)
               FilledButton(
                 onPressed: _busy
                     ? null
                     : () async {
-                        final note = await _ask(order.isPickup ? 'Ready for pickup' : 'Shipped', order.isPickup ? 'Come after 2pm' : 'Okada rider Musa, 076 555 444');
-                        if (note != null) await _act('ship', reason: note.isEmpty ? null : note);
+                        final note = await _ask(
+                            order.isPickup ? 'Ready for pickup' : 'Shipped',
+                            order.isPickup
+                                ? 'Come after 2pm'
+                                : 'Okada rider Musa, 076 555 444');
+                        if (note != null)
+                          await _act('ship',
+                              reason: note.isEmpty ? null : note);
                       },
-                child: Text(order.isPickup ? 'Ready for pickup' : 'Mark as shipped'),
+                child: Text(
+                    order.isPickup ? 'Ready for pickup' : 'Mark as shipped'),
               ),
             if (order.status == 'accepted' && json['can_ship'] != true)
-              const Text('Waiting for the buyer to pay the balance before you ship.', style: TextStyle(color: WiBuyColors.orange)),
-            if (json['can_deliver'] == true) FilledButton(onPressed: _busy ? null : () => _act('deliver'), child: const Text('Mark as delivered')),
+              const Text(
+                  'Waiting for the buyer to pay the balance before you ship.',
+                  style: TextStyle(color: WiBuyColors.orange)),
+            if (json['can_deliver'] == true)
+              FilledButton(
+                  onPressed: _busy ? null : () => _act('deliver'),
+                  child: const Text('Mark as delivered')),
             if (order.returnJson != null) ..._returnPanel(order.returnJson!),
           ]);
         },
@@ -471,7 +669,8 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
   int _reload = 0;
 
   Future<void> _edit([Map<String, dynamic>? product]) async {
-    final saved = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (_) => ProductFormScreen(product: product)));
+    final saved = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => ProductFormScreen(product: product)));
     if (saved == true) setState(() => _reload++);
   }
 
@@ -483,7 +682,8 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
       appBar: AppBar(title: const Text('My products'), actions: [
         TextButton.icon(
           onPressed: () async {
-            final added = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (_) => const ProductImportScreen()));
+            final added = await Navigator.of(context).push<bool>(
+                MaterialPageRoute(builder: (_) => const ProductImportScreen()));
             if (added == true) setState(() => _reload++);
           },
           icon: const Icon(Icons.upload_file),
@@ -491,24 +691,43 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
           style: TextButton.styleFrom(foregroundColor: Colors.white),
         ),
       ]),
-      floatingActionButton: FloatingActionButton.extended(onPressed: () => _edit(), icon: const Icon(Icons.add), label: const Text('Add product')),
+      floatingActionButton: FloatingActionButton.extended(
+          onPressed: () => _edit(),
+          icon: const Icon(Icons.add),
+          label: const Text('Add product')),
       body: Loader<List<Map<String, dynamic>>>(
         key: ValueKey(_reload),
-        load: () async => ((await api.get('/seller/products') as Map<String, dynamic>)['data'] as List).whereType<Map<String, dynamic>>().toList(),
+        load: () async => ((await api.get('/seller/products')
+                as Map<String, dynamic>)['data'] as List)
+            .whereType<Map<String, dynamic>>()
+            .toList(),
         builder: (context, products, reload) => products.isEmpty
-            ? const EmptyState(icon: Icons.inventory_2_outlined, title: 'Add your first product with photos.')
-            : ListView(padding: const EdgeInsets.fromLTRB(12, 12, 12, 90), children: [
-                for (final p in products)
-                  Card(
-                    child: ListTile(
-                      leading: Photo(p['thumb_url'] as String?, size: 52),
-                      title: Text(p['title'] as String, style: const TextStyle(fontWeight: FontWeight.w700)),
-                      subtitle: Text('${formatLe(p['price'] as String)} · ${p['stock']} in stock'),
-                      trailing: StatusChip(p['status'] == 'active' ? 'Live' : (p['status'] as String), status: p['status'] == 'active' ? 'completed' : 'paid'),
-                      onTap: () => _edit(p),
-                    ),
-                  ),
-              ]),
+            ? const EmptyState(
+                icon: Icons.inventory_2_outlined,
+                title: 'Add your first product with photos.')
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
+                children: [
+                    for (final p in products)
+                      Card(
+                        child: ListTile(
+                          leading: Photo(p['thumb_url'] as String?, size: 52),
+                          title: Text(p['title'] as String,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700)),
+                          subtitle: Text(
+                              '${formatLe(p['price'] as String)} · ${p['stock']} in stock'),
+                          trailing: StatusChip(
+                              p['status'] == 'active'
+                                  ? 'Live'
+                                  : (p['status'] as String),
+                              status: p['status'] == 'active'
+                                  ? 'completed'
+                                  : 'paid'),
+                          onTap: () => _edit(p),
+                        ),
+                      ),
+                  ]),
       ),
     );
   }
@@ -526,23 +745,34 @@ class ProductFormScreen extends StatefulWidget {
 class _ProductFormScreenState extends State<ProductFormScreen> {
   Map<String, dynamic>? get p => widget.product;
   late final _title = TextEditingController(text: p?['title'] as String? ?? '');
-  late final _description = TextEditingController(text: p?['description'] as String? ?? '');
+  late final _description =
+      TextEditingController(text: p?['description'] as String? ?? '');
   late final _price = TextEditingController(text: p?['price'] as String? ?? '');
   late final _stock = TextEditingController(text: '${p?['stock'] ?? ''}');
-  late final _unit = TextEditingController(text: p?['unit'] as String? ?? 'piece');
-  late final _moq = TextEditingController(text: '${p?['min_order_quantity'] ?? 1}');
+  late final _unit =
+      TextEditingController(text: p?['unit'] as String? ?? 'piece');
+  late final _moq =
+      TextEditingController(text: '${p?['min_order_quantity'] ?? 1}');
   late bool _live = (p?['status'] ?? 'active') == 'active';
   late bool _genuine = p?['genuine_guarantee'] == true;
   (String, List<int>)? _video;
   bool _removeVideo = false;
   late String _condition = p?['condition'] as String? ?? 'new';
-  late final List<Map<String, dynamic>> _photos = ((p?['photos'] as List?) ?? []).whereType<Map<String, dynamic>>().toList();
+  late final List<Map<String, dynamic>> _photos =
+      ((p?['photos'] as List?) ?? [])
+          .whereType<Map<String, dynamic>>()
+          .toList();
   final List<int> _remove = [];
   List<PickedPhoto> _newPhotos = [];
   bool _busy = false;
   late final List<_OptionRow> _options = [
-    for (final v in ((p?['variants'] as List?) ?? []).whereType<Map<String, dynamic>>())
-      _OptionRow(id: v['id'] as int?, name: v['name'] as String? ?? '', price: v['price'] as String? ?? '', stock: '${v['stock'] ?? 0}'),
+    for (final v
+        in ((p?['variants'] as List?) ?? []).whereType<Map<String, dynamic>>())
+      _OptionRow(
+          id: v['id'] as int?,
+          name: v['name'] as String? ?? '',
+          price: v['price'] as String? ?? '',
+          stock: '${v['stock'] ?? 0}'),
   ];
 
   @override
@@ -556,12 +786,47 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     super.dispose();
   }
 
+  Future<void> _sponsor() async {
+    final days = await showDialog<int>(
+      context: context,
+      builder: (dialog) => SimpleDialog(
+        title: const Text('Sponsor this product'),
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(24, 0, 24, 8),
+            child: Text(
+                'It shows first in search and on the home page, labelled "Sponsored". Paid from your balance.'),
+          ),
+          for (final d in const [1, 3, 7, 14, 30])
+            SimpleDialogOption(
+                onPressed: () => Navigator.pop(dialog, d),
+                child: Text('$d day${d > 1 ? 's' : ''}')),
+        ],
+      ),
+    );
+    if (days == null || !mounted) return;
+    try {
+      final json = await SessionScope.read(context)
+              .api
+              .post('/seller/products/${p!['slug']}/promote', {'days': days})
+          as Map<String, dynamic>;
+      if (mounted)
+        showMessage(context,
+            'Sponsored until ${DateTime.parse(json['sponsored_until'] as String).toLocal().toString().substring(0, 16)}.');
+    } on Object catch (e) {
+      if (mounted) showMessage(context, e);
+    }
+  }
+
   Future<void> _pickVideo(ImageSource source) async {
-    final file = await ImagePicker().pickVideo(source: source, maxDuration: const Duration(seconds: 60));
+    final file = await ImagePicker()
+        .pickVideo(source: source, maxDuration: const Duration(seconds: 60));
     if (file == null) return;
     final bytes = await file.readAsBytes();
     if (bytes.length > 30 * 1024 * 1024) {
-      if (mounted) showMessage(context, 'That video is too big. Keep it under 30 MB (about a minute).');
+      if (mounted)
+        showMessage(context,
+            'That video is too big. Keep it under 30 MB (about a minute).');
       return;
     }
     if (mounted) setState(() => _video = (file.name, bytes));
@@ -581,29 +846,40 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       'status': _live ? 'active' : 'draft',
       'genuine_guarantee': _genuine ? '1' : '0',
       if (_removeVideo && _video == null) 'remove_video': '1',
-      for (var i = 0; i < _remove.length; i++) 'remove_images[$i]': '${_remove[i]}',
+      for (var i = 0; i < _remove.length; i++)
+        'remove_images[$i]': '${_remove[i]}',
       // Options (size, colour): an empty list switches them off.
       'variants_sent': '1',
-      for (final (i, o) in _options.where((o) => o.name.text.trim().isNotEmpty).indexed) ...{
+      for (final (i, o)
+          in _options.where((o) => o.name.text.trim().isNotEmpty).indexed) ...{
         if (o.id != null) 'variants[$i][id]': '${o.id}',
         'variants[$i][name]': o.name.text.trim(),
         'variants[$i][price]': o.price.text.trim(),
-        'variants[$i][stock]': o.stock.text.trim().isEmpty ? '0' : o.stock.text.trim(),
+        'variants[$i][stock]':
+            o.stock.text.trim().isEmpty ? '0' : o.stock.text.trim(),
       },
       // Keep the existing wholesale tiers (edit them on the website).
-      for (final (i, t) in ((p?['all_tiers'] as List?) ?? []).whereType<Map<String, dynamic>>().indexed) ...{
+      for (final (i, t) in ((p?['all_tiers'] as List?) ?? [])
+          .whereType<Map<String, dynamic>>()
+          .indexed) ...{
         'tiers[$i][min_quantity]': '${t['min_quantity']}',
         'tiers[$i][unit_price]': '${t['unit_price']}',
         if (t['business_only'] == true) 'tiers[$i][business_only]': '1',
       },
     };
     try {
-      await api.postMultipart(p == null ? '/seller/products' : '/seller/products/${p!['slug']}', fields, {
+      await api.postMultipart(
+          p == null ? '/seller/products' : '/seller/products/${p!['slug']}',
+          fields, {
         'images[]': [for (final ph in _newPhotos) (ph.$1, ph.$2)],
         if (_video != null) 'video': [_video!],
       });
       if (!mounted) return;
-      showMessage(context, p == null ? 'Product added. Photos take a moment to process.' : 'Product saved.');
+      showMessage(
+          context,
+          p == null
+              ? 'Product added. Photos take a moment to process.'
+              : 'Product saved.');
       Navigator.pop(context, true);
     } on Object catch (e) {
       if (mounted) showMessage(context, e);
@@ -617,31 +893,53 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         appBar: AppBar(title: Text(p == null ? 'Add product' : 'Edit product')),
         body: ListView(padding: const EdgeInsets.all(16), children: [
           if (_photos.isNotEmpty) ...[
-            const Text('Current photos (tap × to remove)', style: TextStyle(fontWeight: FontWeight.w700)),
+            const Text('Current photos (tap × to remove)',
+                style: TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 6),
             Wrap(spacing: 8, children: [
               for (final photo in _photos)
                 Stack(children: [
-                  Opacity(opacity: _remove.contains(photo['id']) ? 0.3 : 1, child: Photo(photo['thumb_url'] as String?, size: 72)),
+                  Opacity(
+                      opacity: _remove.contains(photo['id']) ? 0.3 : 1,
+                      child: Photo(photo['thumb_url'] as String?, size: 72)),
                   Positioned(
                     right: 0,
                     child: InkWell(
-                      onTap: () => setState(() => _remove.contains(photo['id']) ? _remove.remove(photo['id']) : _remove.add(photo['id'] as int)),
-                      child: const CircleAvatar(radius: 11, backgroundColor: Colors.black54, child: Icon(Icons.close, size: 14, color: Colors.white)),
+                      onTap: () => setState(() => _remove.contains(photo['id'])
+                          ? _remove.remove(photo['id'])
+                          : _remove.add(photo['id'] as int)),
+                      child: const CircleAvatar(
+                          radius: 11,
+                          backgroundColor: Colors.black54,
+                          child:
+                              Icon(Icons.close, size: 14, color: Colors.white)),
                     ),
                   ),
                 ]),
             ]),
             const SizedBox(height: 12),
           ],
-          PhotoPicker(onChanged: (ph) => _newPhotos = ph, max: 6, label: 'Add photos'),
+          PhotoPicker(
+              onChanged: (ph) => _newPhotos = ph, max: 6, label: 'Add photos'),
           const SizedBox(height: 12),
-          TextField(controller: _title, decoration: const InputDecoration(labelText: 'Product name')),
+          TextField(
+              controller: _title,
+              decoration: const InputDecoration(labelText: 'Product name')),
           const SizedBox(height: 10),
           Row(children: [
-            Expanded(child: TextField(controller: _price, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Price (Le)'))),
+            Expanded(
+                child: TextField(
+                    controller: _price,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration:
+                        const InputDecoration(labelText: 'Price (Le)'))),
             const SizedBox(width: 10),
-            Expanded(child: TextField(controller: _unit, decoration: const InputDecoration(labelText: 'Unit (bag, piece…)'))),
+            Expanded(
+                child: TextField(
+                    controller: _unit,
+                    decoration: const InputDecoration(
+                        labelText: 'Unit (bag, piece…)'))),
           ]),
           const SizedBox(height: 10),
           Row(children: [
@@ -650,30 +948,60 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                 controller: _stock,
                 enabled: _options.isEmpty,
                 keyboardType: TextInputType.number,
-                decoration: InputDecoration(labelText: 'In stock', helperText: _options.isEmpty ? null : 'Total of the options'),
+                decoration: InputDecoration(
+                    labelText: 'In stock',
+                    helperText:
+                        _options.isEmpty ? null : 'Total of the options'),
               ),
             ),
             const SizedBox(width: 10),
-            Expanded(child: TextField(controller: _moq, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Minimum order'))),
+            Expanded(
+                child: TextField(
+                    controller: _moq,
+                    keyboardType: TextInputType.number,
+                    decoration:
+                        const InputDecoration(labelText: 'Minimum order'))),
           ]),
           const SizedBox(height: 10),
           SegmentedButton<String>(
-            segments: const [ButtonSegment(value: 'new', label: Text('New')), ButtonSegment(value: 'used', label: Text('Used'))],
+            segments: const [
+              ButtonSegment(value: 'new', label: Text('New')),
+              ButtonSegment(value: 'used', label: Text('Used'))
+            ],
             selected: {_condition},
             onSelectionChanged: (s) => setState(() => _condition = s.first),
           ),
           const SizedBox(height: 14),
-          const Text('Options (size, colour…)', style: TextStyle(fontWeight: FontWeight.w700)),
-          const Text('Leave empty when there is only one kind. Price empty = the main price.', style: TextStyle(color: WiBuyColors.muted, fontSize: 12)),
+          const Text('Options (size, colour…)',
+              style: TextStyle(fontWeight: FontWeight.w700)),
+          const Text(
+              'Leave empty when there is only one kind. Price empty = the main price.',
+              style: TextStyle(color: WiBuyColors.muted, fontSize: 12)),
           for (final o in _options)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Row(children: [
-                Expanded(flex: 3, child: TextField(controller: o.name, decoration: const InputDecoration(labelText: 'Option', hintText: 'Large / Red'))),
+                Expanded(
+                    flex: 3,
+                    child: TextField(
+                        controller: o.name,
+                        decoration: const InputDecoration(
+                            labelText: 'Option', hintText: 'Large / Red'))),
                 const SizedBox(width: 6),
-                Expanded(flex: 2, child: TextField(controller: o.price, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Price'))),
+                Expanded(
+                    flex: 2,
+                    child: TextField(
+                        controller: o.price,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration: const InputDecoration(labelText: 'Price'))),
                 const SizedBox(width: 6),
-                Expanded(flex: 2, child: TextField(controller: o.stock, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Stock'))),
+                Expanded(
+                    flex: 2,
+                    child: TextField(
+                        controller: o.stock,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'Stock'))),
                 IconButton(
                   tooltip: 'Remove option',
                   icon: const Icon(Icons.delete_outline),
@@ -686,31 +1014,67 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
             ),
           Align(
             alignment: Alignment.centerLeft,
-            child: TextButton.icon(onPressed: _options.length >= 30 ? null : () => setState(() => _options.add(_OptionRow())), icon: const Icon(Icons.add), label: const Text('Add option')),
+            child: TextButton.icon(
+                onPressed: _options.length >= 30
+                    ? null
+                    : () => setState(() => _options.add(_OptionRow())),
+                icon: const Icon(Icons.add),
+                label: const Text('Add option')),
           ),
           const SizedBox(height: 4),
-          TextField(controller: _description, maxLines: 4, decoration: const InputDecoration(labelText: 'Description')),
+          TextField(
+              controller: _description,
+              maxLines: 4,
+              decoration: const InputDecoration(labelText: 'Description')),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             value: _genuine,
             onChanged: (v) => setState(() => _genuine = v),
             title: const Text('✅ I guarantee this product is genuine'),
-            subtitle: const Text('If it turns out fake, the buyer is refunded and gets compensation from your balance.'),
+            subtitle: const Text(
+                'If it turns out fake, the buyer is refunded and gets compensation from your balance.'),
           ),
-          const Text('🎥 Video (optional, up to 60 seconds)', style: TextStyle(fontWeight: FontWeight.w700)),
+          const Text('🎥 Video (optional, up to 60 seconds)',
+              style: TextStyle(fontWeight: FontWeight.w700)),
           Wrap(spacing: 8, children: [
-            OutlinedButton.icon(onPressed: () => _pickVideo(ImageSource.camera), icon: const Icon(Icons.videocam), label: const Text('Record')),
-            OutlinedButton.icon(onPressed: () => _pickVideo(ImageSource.gallery), icon: const Icon(Icons.video_library), label: const Text('Choose')),
+            OutlinedButton.icon(
+                onPressed: () => _pickVideo(ImageSource.camera),
+                icon: const Icon(Icons.videocam),
+                label: const Text('Record')),
+            OutlinedButton.icon(
+                onPressed: () => _pickVideo(ImageSource.gallery),
+                icon: const Icon(Icons.video_library),
+                label: const Text('Choose')),
             if (_video == null && p?['video_url'] != null && !_removeVideo)
-              TextButton(onPressed: () => setState(() => _removeVideo = true), child: const Text('Remove the video')),
+              TextButton(
+                  onPressed: () => setState(() => _removeVideo = true),
+                  child: const Text('Remove the video')),
           ]),
-          if (_video != null) Text('New video: ${_video!.$1}', style: const TextStyle(color: WiBuyColors.muted, fontSize: 12)),
+          if (_video != null)
+            Text('New video: ${_video!.$1}',
+                style: const TextStyle(color: WiBuyColors.muted, fontSize: 12)),
           if (_video == null && p?['video_url'] != null && !_removeVideo)
-            Text('This product has a video (${p?['video_seconds'] ?? '?'}s).', style: const TextStyle(color: WiBuyColors.muted, fontSize: 12)),
-          SwitchListTile(contentPadding: EdgeInsets.zero, value: _live, onChanged: (v) => setState(() => _live = v), title: const Text('Show to buyers now')),
-          const Text('Wholesale prices, member prices and samples: edit on the website.', style: TextStyle(color: WiBuyColors.muted, fontSize: 12)),
+            Text('This product has a video (${p?['video_seconds'] ?? '?'}s).',
+                style: const TextStyle(color: WiBuyColors.muted, fontSize: 12)),
+          SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _live,
+              onChanged: (v) => setState(() => _live = v),
+              title: const Text('Show to buyers now')),
+          if (p != null && p!['status'] == 'active')
+            OutlinedButton.icon(
+                onPressed: _busy ? null : _sponsor,
+                icon: const Icon(Icons.campaign_outlined),
+                label: Text(p!['is_sponsored'] == true
+                    ? '📣 Sponsored · add more days'
+                    : '📣 Sponsor this product')),
+          const Text(
+              'Wholesale prices, member prices and samples: edit on the website.',
+              style: TextStyle(color: WiBuyColors.muted, fontSize: 12)),
           const SizedBox(height: 14),
-          FilledButton(onPressed: _busy ? null : _save, child: Text(_busy ? 'Saving…' : 'Save product')),
+          FilledButton(
+              onPressed: _busy ? null : _save,
+              child: Text(_busy ? 'Saving…' : 'Save product')),
         ]),
       );
 }
@@ -760,14 +1124,19 @@ class _ProductImportScreenState extends State<ProductImportScreen> {
       _errors = [];
     });
     try {
-      final json = await SessionScope.read(context).api.post('/seller/products/import', {'csv': _rows.text}) as Map<String, dynamic>;
+      final json = await SessionScope.read(context)
+              .api
+              .post('/seller/products/import', {'csv': _rows.text})
+          as Map<String, dynamic>;
       if (!mounted) return;
       showMessage(context, json['message'] as String);
       Navigator.pop(context, true);
     } on ApiException catch (e) {
       if (!mounted) return;
       final rows = e.errors['rows'];
-      rows == null || rows.isEmpty ? showMessage(context, e) : setState(() => _errors = rows);
+      rows == null || rows.isEmpty
+          ? showMessage(context, e)
+          : setState(() => _errors = rows);
     } on Object catch (e) {
       if (mounted) showMessage(context, e);
     } finally {
@@ -779,31 +1148,48 @@ class _ProductImportScreenState extends State<ProductImportScreen> {
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('Bulk upload')),
         body: Loader<Map<String, dynamic>>(
-          load: () async => await SessionScope.read(context).api.get('/seller/products/import') as Map<String, dynamic>,
-          builder: (context, json, reload) => ListView(padding: const EdgeInsets.all(16), children: [
-            const Text('Add many products at once', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+          load: () async => await SessionScope.read(context)
+              .api
+              .get('/seller/products/import') as Map<String, dynamic>,
+          builder: (context, json, reload) =>
+              ListView(padding: const EdgeInsets.all(16), children: [
+            const Text('Add many products at once',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
             Text(
               'In your spreadsheet, select the rows (with the heading row first), copy, and paste them below. '
               'Up to ${json['max_rows']} products. They are added as drafts: add photos, then set each one live.',
             ),
             const SizedBox(height: 8),
-            Text('Columns: ${(json['columns'] as List).join(', ')}. Only title, price and stock are needed.', style: const TextStyle(color: WiBuyColors.muted, fontSize: 12)),
-            TextButton(onPressed: () => setState(() => _rows.text = json['example'] as String), child: const Text('Fill in an example')),
+            Text(
+                'Columns: ${(json['columns'] as List).join(', ')}. Only title, price and stock are needed.',
+                style: const TextStyle(color: WiBuyColors.muted, fontSize: 12)),
+            TextButton(
+                onPressed: () =>
+                    setState(() => _rows.text = json['example'] as String),
+                child: const Text('Fill in an example')),
             TextField(
               controller: _rows,
               minLines: 6,
               maxLines: 14,
               style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-              decoration: const InputDecoration(labelText: 'Rows', hintText: 'title,price,stock\nOil 5L,95,10', alignLabelWithHint: true),
+              decoration: const InputDecoration(
+                  labelText: 'Rows',
+                  hintText: 'title,price,stock\nOil 5L,95,10',
+                  alignLabelWithHint: true),
             ),
             if (_errors.isNotEmpty) ...[
               const SizedBox(height: 10),
-              const Text('Nothing was added. Fix these rows:', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.red)),
-              for (final e in _errors) Text('• $e', style: const TextStyle(color: Colors.red)),
+              const Text('Nothing was added. Fix these rows:',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700, color: Colors.red)),
+              for (final e in _errors)
+                Text('• $e', style: const TextStyle(color: Colors.red)),
             ],
             const SizedBox(height: 12),
-            FilledButton(onPressed: _busy ? null : _upload, child: Text(_busy ? 'Checking…' : 'Add products')),
+            FilledButton(
+                onPressed: _busy ? null : _upload,
+                child: Text(_busy ? 'Checking…' : 'Add products')),
           ]),
         ),
       );
@@ -821,7 +1207,8 @@ class SellerEarningsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Earnings')),
       body: Loader<Map<String, dynamic>>(
-        load: () async => await api.get('/seller/earnings') as Map<String, dynamic>,
+        load: () async =>
+            await api.get('/seller/earnings') as Map<String, dynamic>,
         builder: (context, json, reload) {
           final money = json['money'] as Map<String, dynamic>;
           final to = json['payout_to'] as Map<String, dynamic>;
@@ -830,33 +1217,50 @@ class SellerEarningsScreen extends StatelessWidget {
             onRefresh: reload,
             child: ListView(padding: const EdgeInsets.all(14), children: [
               Row(children: [
-                Expanded(child: _Money('Available', money['available'] as String)),
+                Expanded(
+                    child: _Money('Available', money['available'] as String)),
                 Expanded(child: _Money('On hold', money['pending'] as String)),
               ]),
               const SizedBox(height: 6),
-              Text('Paid out: ${formatLe(money['paid_out'] as String)} · on the way: ${formatLe(money['in_transit'] as String)}'),
+              Text(
+                  'Paid out: ${formatLe(money['paid_out'] as String)} · on the way: ${formatLe(money['in_transit'] as String)}'),
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: () async {
-                  final amount = TextEditingController(text: money['available'] as String);
+                  final amount =
+                      TextEditingController(text: money['available'] as String);
                   final ok = await showDialog<bool>(
                     context: context,
                     builder: (context) => AlertDialog(
                       title: const Text('Request a payout'),
-                      content: Column(mainAxisSize: MainAxisSize.min, children: [
-                        Text('To ${to['operator']} ${displayPhone(to['phone'] as String?)} · minimum ${formatLe(json['min_payout'] as String)}'),
-                        TextField(controller: amount, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Amount (Le)')),
+                      content:
+                          Column(mainAxisSize: MainAxisSize.min, children: [
+                        Text(
+                            'To ${to['operator']} ${displayPhone(to['phone'] as String?)} · minimum ${formatLe(json['min_payout'] as String)}'),
+                        TextField(
+                            controller: amount,
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            decoration: const InputDecoration(
+                                labelText: 'Amount (Le)')),
                       ]),
                       actions: [
-                        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Request')),
+                        TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancel')),
+                        FilledButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Request')),
                       ],
                     ),
                   );
                   if (ok != true || !context.mounted) return;
                   try {
-                    final res = await api.post('/seller/payouts', {'amount': amount.text.trim()}) as Map<String, dynamic>;
-                    if (context.mounted) showMessage(context, res['message'] as String);
+                    final res = await api.post(
+                            '/seller/payouts', {'amount': amount.text.trim()})
+                        as Map<String, dynamic>;
+                    if (context.mounted)
+                      showMessage(context, res['message'] as String);
                   } on Object catch (e) {
                     if (context.mounted) showMessage(context, e);
                   }
@@ -865,13 +1269,25 @@ class SellerEarningsScreen extends StatelessWidget {
                 child: const Text('Request payout'),
               ),
               const SizedBox(height: 16),
-              const Text('Payouts', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-              for (final pay in (json['payouts'] as List).whereType<Map<String, dynamic>>())
-                ListTile(dense: true, contentPadding: EdgeInsets.zero, title: Text(formatLe('${pay['amount']}')), trailing: StatusChip('${pay['status']}')),
+              const Text('Payouts',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+              for (final pay in (json['payouts'] as List)
+                  .whereType<Map<String, dynamic>>())
+                ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(formatLe('${pay['amount']}')),
+                    trailing: StatusChip('${pay['status']}')),
               const SizedBox(height: 10),
-              const Text('Latest money in and out', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-              for (final e in (json['entries'] as List).whereType<Map<String, dynamic>>())
-                ListTile(dense: true, contentPadding: EdgeInsets.zero, title: Text('${e['description']}'), trailing: Text(formatLe('${e['amount']}'))),
+              const Text('Latest money in and out',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+              for (final e in (json['entries'] as List)
+                  .whereType<Map<String, dynamic>>())
+                ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('${e['description']}'),
+                    trailing: Text(formatLe('${e['amount']}'))),
             ]),
           );
         },
@@ -894,7 +1310,11 @@ class _SellerRfqsScreenState extends State<SellerRfqsScreen> {
 
   Future<void> _quote(RfqInfo rfq) async {
     final api = SessionScope.read(context).api;
-    final products = ((await api.get('/seller/products') as Map<String, dynamic>)['data'] as List).whereType<Map<String, dynamic>>().where((p) => p['status'] == 'active').toList();
+    final products = ((await api.get('/seller/products')
+            as Map<String, dynamic>)['data'] as List)
+        .whereType<Map<String, dynamic>>()
+        .where((p) => p['status'] == 'active')
+        .toList();
     if (!mounted) return;
     if (products.isEmpty) {
       showMessage(context, 'Add a live product first.');
@@ -911,28 +1331,60 @@ class _SellerRfqsScreenState extends State<SellerRfqsScreen> {
       isScrollControlled: true,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => Padding(
-          padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text('Quote: ${rfq.title}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
-            DropdownButtonFormField<int>(
-              initialValue: productId,
-              decoration: const InputDecoration(labelText: 'Your product'),
-              items: [for (final p in products) DropdownMenuItem(value: (p['id'] as num).toInt(), child: Text(p['title'] as String, overflow: TextOverflow.ellipsis))],
-              onChanged: (v) => setState(() => productId = v ?? productId),
-            ),
-            const SizedBox(height: 8),
-            Row(children: [
-              Expanded(child: TextField(controller: price, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Price each (Le)'))),
-              const SizedBox(width: 8),
-              Expanded(child: TextField(controller: quantity, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Quantity'))),
-            ]),
-            const SizedBox(height: 8),
-            TextField(controller: days, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Days to deliver')),
-            const SizedBox(height: 8),
-            TextField(controller: note, decoration: const InputDecoration(labelText: 'Note (brand, quality)')),
-            const SizedBox(height: 12),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Send quote (price locked 14 days)')),
-          ]),
+          padding: EdgeInsets.fromLTRB(
+              20, 20, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
+          child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Quote: ${rfq.title}',
+                    style: const TextStyle(
+                        fontSize: 17, fontWeight: FontWeight.w800)),
+                DropdownButtonFormField<int>(
+                  initialValue: productId,
+                  decoration: const InputDecoration(labelText: 'Your product'),
+                  items: [
+                    for (final p in products)
+                      DropdownMenuItem(
+                          value: (p['id'] as num).toInt(),
+                          child: Text(p['title'] as String,
+                              overflow: TextOverflow.ellipsis))
+                  ],
+                  onChanged: (v) => setState(() => productId = v ?? productId),
+                ),
+                const SizedBox(height: 8),
+                Row(children: [
+                  Expanded(
+                      child: TextField(
+                          controller: price,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
+                          decoration: const InputDecoration(
+                              labelText: 'Price each (Le)'))),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: TextField(
+                          controller: quantity,
+                          keyboardType: TextInputType.number,
+                          decoration:
+                              const InputDecoration(labelText: 'Quantity'))),
+                ]),
+                const SizedBox(height: 8),
+                TextField(
+                    controller: days,
+                    keyboardType: TextInputType.number,
+                    decoration:
+                        const InputDecoration(labelText: 'Days to deliver')),
+                const SizedBox(height: 8),
+                TextField(
+                    controller: note,
+                    decoration: const InputDecoration(
+                        labelText: 'Note (brand, quality)')),
+                const SizedBox(height: 12),
+                FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('Send quote (price locked 14 days)')),
+              ]),
         ),
       ),
     );
@@ -960,16 +1412,28 @@ class _SellerRfqsScreenState extends State<SellerRfqsScreen> {
       appBar: AppBar(title: const Text('Quote requests')),
       body: Loader<List<RfqInfo>>(
         key: ValueKey(_reload),
-        load: () async => ((await api.get('/seller/rfqs') as Map<String, dynamic>)['data'] as List).whereType<Map<String, dynamic>>().map(RfqInfo.fromJson).toList(),
+        load: () async => ((await api.get('/seller/rfqs')
+                as Map<String, dynamic>)['data'] as List)
+            .whereType<Map<String, dynamic>>()
+            .map(RfqInfo.fromJson)
+            .toList(),
         builder: (context, rfqs, _) => rfqs.isEmpty
-            ? const EmptyState(icon: Icons.request_quote_outlined, title: 'No new requests. Buyers post what they need here.')
+            ? const EmptyState(
+                icon: Icons.request_quote_outlined,
+                title: 'No new requests. Buyers post what they need here.')
             : ListView(padding: const EdgeInsets.all(12), children: [
                 for (final r in rfqs)
                   Card(
                     child: ListTile(
-                      title: Text(r.title, style: const TextStyle(fontWeight: FontWeight.w700)),
-                      subtitle: Text('${r.quantity} ${r.unit} · ${r.district}${r.targetPrice != null ? ' · target ${formatLe(r.targetPrice)}' : ''}${r.description != null ? '\n${r.description}' : ''}'),
-                      trailing: FilledButton(style: FilledButton.styleFrom(minimumSize: const Size(80, 40)), onPressed: () => _quote(r), child: const Text('Quote')),
+                      title: Text(r.title,
+                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                      subtitle: Text(
+                          '${r.quantity} ${r.unit} · ${r.district}${r.targetPrice != null ? ' · target ${formatLe(r.targetPrice)}' : ''}${r.description != null ? '\n${r.description}' : ''}'),
+                      trailing: FilledButton(
+                          style: FilledButton.styleFrom(
+                              minimumSize: const Size(80, 40)),
+                          onPressed: () => _quote(r),
+                          child: const Text('Quote')),
                     ),
                   ),
               ]),

@@ -13,7 +13,8 @@ class Loader<T> extends StatefulWidget {
   const Loader({super.key, required this.load, required this.builder});
 
   final Future<T> Function() load;
-  final Widget Function(BuildContext context, T data, Future<void> Function() reload) builder;
+  final Widget Function(
+      BuildContext context, T data, Future<void> Function() reload) builder;
 
   @override
   State<Loader<T>> createState() => _LoaderState<T>();
@@ -33,7 +34,8 @@ class _LoaderState<T> extends State<Loader<T>> {
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return ErrorRetry(message: snapshot.error.toString(), onRetry: _reload);
+            return ErrorRetry(
+                message: snapshot.error.toString(), onRetry: _reload);
           }
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
@@ -56,16 +58,22 @@ class ErrorRetry extends StatelessWidget {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             const Icon(Icons.wifi_off, size: 48, color: WiBuyColors.muted),
             const SizedBox(height: 12),
-            Text(message, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16)),
+            Text(message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16)),
             const SizedBox(height: 16),
-            SizedBox(width: 200, child: FilledButton(onPressed: onRetry, child: const Text('Try again'))),
+            SizedBox(
+                width: 200,
+                child: FilledButton(
+                    onPressed: onRetry, child: const Text('Try again'))),
           ]),
         ),
       );
 }
 
 class EmptyState extends StatelessWidget {
-  const EmptyState({super.key, required this.icon, required this.title, this.action});
+  const EmptyState(
+      {super.key, required this.icon, required this.title, this.action});
 
   final IconData icon;
   final String title;
@@ -78,7 +86,9 @@ class EmptyState extends StatelessWidget {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Icon(icon, size: 56, color: WiBuyColors.muted),
             const SizedBox(height: 12),
-            Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 17, color: WiBuyColors.text)),
+            Text(title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 17, color: WiBuyColors.text)),
             if (action != null) ...[const SizedBox(height: 16), action!],
           ]),
         ),
@@ -95,7 +105,10 @@ class Photo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const placeholder = ColoredBox(color: Color(0xFFE7E5E4), child: Center(child: Icon(Icons.image_outlined, color: WiBuyColors.muted)));
+    const placeholder = ColoredBox(
+        color: Color(0xFFE7E5E4),
+        child: Center(
+            child: Icon(Icons.image_outlined, color: WiBuyColors.muted)));
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
@@ -125,26 +138,59 @@ class ProductCard extends StatelessWidget {
   Widget build(BuildContext context) => Card(
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProductScreen(slug: product.slug))),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => ProductScreen(slug: product.slug))),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             // The photo takes whatever height the text leaves, so cards never overflow.
-            Expanded(child: Photo(product.thumbUrl, radius: 0)),
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(product.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14)),
-                const SizedBox(height: 4),
-                Text(formatLe(product.price), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: WiBuyColors.green)),
-                if (product.hasTiers)
-                  Text('From ${formatLe(product.lowestPrice)} in bulk', style: const TextStyle(fontSize: 12, color: WiBuyColors.orange)),
-                if (product.seller != null)
-                  Text(
-                    '${product.seller!.isVerified ? '✓ ' : ''}${product.seller!.shopName}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12, color: WiBuyColors.muted),
+            Expanded(
+              child: Stack(fit: StackFit.expand, children: [
+                Photo(product.thumbUrl, radius: 0),
+                if (product.isSponsored)
+                  Positioned(
+                    left: 6,
+                    bottom: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(6)),
+                      child: const Text('Sponsored',
+                          style: TextStyle(
+                              fontSize: 11, color: WiBuyColors.muted)),
+                    ),
                   ),
               ]),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(product.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 14)),
+                    const SizedBox(height: 4),
+                    Text(formatLe(product.price),
+                        style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: WiBuyColors.green)),
+                    if (product.hasTiers)
+                      Text('From ${formatLe(product.lowestPrice)} in bulk',
+                          style: const TextStyle(
+                              fontSize: 12, color: WiBuyColors.orange)),
+                    if (product.seller != null)
+                      Text(
+                        '${product.seller!.isVerified ? '✓ ' : ''}${product.seller!.shopName}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 12, color: WiBuyColors.muted),
+                      ),
+                  ]),
             ),
           ]),
         ),
@@ -181,16 +227,22 @@ class StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bad = status == 'cancelled' || status == 'refunded' || status == 'rejected' || status == 'disputed';
+    final bad = status == 'cancelled' ||
+        status == 'refunded' ||
+        status == 'rejected' ||
+        status == 'disputed';
     final done = status == 'completed' || status == 'delivered';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: bad ? const Color(0xFFFEE2E2) : (done ? WiBuyColors.greenLight : const Color(0xFFFEF3C7)),
+        color: bad
+            ? const Color(0xFFFEE2E2)
+            : (done ? WiBuyColors.greenLight : const Color(0xFFFEF3C7)),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+      child: Text(label,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
     );
   }
 }
@@ -198,27 +250,35 @@ class StatusChip extends StatelessWidget {
 void showMessage(BuildContext context, Object message) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(message is ApiException ? message.display : message.toString())));
+    ..showSnackBar(SnackBar(
+        content: Text(
+            message is ApiException ? message.display : message.toString())));
 }
 
 /// Pages that stay on the website (selling, problem reports with photos, chat).
 Future<void> openLink(BuildContext context, String url) async {
-  final ok = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  final ok =
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
   if (!ok && context.mounted) {
     showMessage(context, 'Could not open $url');
   }
 }
 
 /// Make a share link on the backend (so a friend's open counts) and open WhatsApp with it.
-Future<void> shareOnWhatsApp(BuildContext context, String kind, {String? target}) async {
+Future<void> shareOnWhatsApp(BuildContext context, String kind,
+    {String? target}) async {
   final session = SessionScope.read(context);
   if (!session.isLoggedIn) {
-    showMessage(context, 'Log in first, so your friends\' visits count for you.');
+    showMessage(
+        context, 'Log in first, so your friends\' visits count for you.');
     return;
   }
   try {
-    final json = await session.api.post('/shares', {'kind': kind, if (target != null) 'target': target}) as Map<String, dynamic>;
-    if (context.mounted) await openLink(context, json['whatsapp_url'] as String);
+    final json = await session.api.post(
+            '/shares', {'kind': kind, if (target != null) 'target': target})
+        as Map<String, dynamic>;
+    if (context.mounted)
+      await openLink(context, json['whatsapp_url'] as String);
   } on Object catch (e) {
     if (context.mounted) showMessage(context, e);
   }
@@ -237,7 +297,8 @@ class Countdown extends StatefulWidget {
 }
 
 class _CountdownState extends State<Countdown> {
-  late final Stream<int> _ticks = Stream.periodic(const Duration(seconds: 1), (i) => i);
+  late final Stream<int> _ticks =
+      Stream.periodic(const Duration(seconds: 1), (i) => i);
 
   @override
   Widget build(BuildContext context) => StreamBuilder<int>(
@@ -250,7 +311,8 @@ class _CountdownState extends State<Countdown> {
           final h = left.inHours;
           final m = left.inMinutes.remainder(60).toString().padLeft(2, '0');
           final s = left.inSeconds.remainder(60).toString().padLeft(2, '0');
-          return Text('${widget.prefix}${h > 0 ? '${h}h ' : ''}${m}m ${s}s', style: widget.style);
+          return Text('${widget.prefix}${h > 0 ? '${h}h ' : ''}${m}m ${s}s',
+              style: widget.style);
         },
       );
 }
@@ -276,7 +338,12 @@ class ProgressBar extends StatelessWidget {
 /// A sideways list with a scrollbar that is always visible and can be dragged, so people can see
 /// there is more to the left or right (categories, deals, shops).
 class HorizontalStrip extends StatefulWidget {
-  const HorizontalStrip({super.key, required this.height, required this.itemCount, required this.itemBuilder, this.spacing = 10});
+  const HorizontalStrip(
+      {super.key,
+      required this.height,
+      required this.itemCount,
+      required this.itemBuilder,
+      this.spacing = 10});
 
   /// Height of the items (the scrollbar adds a little below).
   final double height;

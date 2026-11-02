@@ -1,12 +1,33 @@
 // Typed views of the WiBuy API's JSON. Money stays a String ("650.00") end to end.
 
 List<T> _list<T>(dynamic json, T Function(Map<String, dynamic>) parse) =>
-    json is List ? json.whereType<Map<String, dynamic>>().map(parse).toList() : <T>[];
+    json is List
+        ? json.whereType<Map<String, dynamic>>().map(parse).toList()
+        : <T>[];
 
 String _s(dynamic v) => v?.toString() ?? '';
 
 class User {
-  User({required this.id, required this.name, required this.phone, required this.displayPhone, required this.isSeller, required this.isAdmin, this.isAgent = false, this.isRider = false});
+  User(
+      {required this.id,
+      required this.name,
+      required this.phone,
+      required this.displayPhone,
+      required this.isSeller,
+      required this.isAdmin,
+      this.isAgent = false,
+      this.isRider = false,
+      this.district,
+      this.area});
+
+  /// Where they live (asked at sign-up). With the name, needed before buying.
+  final String? district;
+  final String? area;
+
+  bool get hasDetails =>
+      (name ?? '').isNotEmpty &&
+      (district ?? '').isNotEmpty &&
+      (area ?? '').isNotEmpty;
 
   /// WiBuy inspection agent.
   final bool isAgent;
@@ -23,6 +44,8 @@ class User {
         isAdmin: j['is_admin'] == true,
         isAgent: j['is_agent'] == true,
         isRider: j['is_rider'] == true,
+        district: j['district'] as String?,
+        area: j['area'] as String?,
       );
 
   final int id;
@@ -41,11 +64,17 @@ class User {
         'is_admin': isAdmin,
         'is_agent': isAgent,
         'is_rider': isRider,
+        'district': district,
+        'area': area,
       };
 }
 
 class Category {
-  Category({required this.name, required this.slug, this.emoji, this.children = const []});
+  Category(
+      {required this.name,
+      required this.slug,
+      this.emoji,
+      this.children = const []});
 
   factory Category.fromJson(Map<String, dynamic> j) => Category(
         name: _s(j['name']),
@@ -74,7 +103,15 @@ class Seller {
     this.webUrl,
     this.reliabilityScore,
     this.userId,
+    this.freeDeliveryFrom,
+    this.holidayNotice,
   });
+
+  /// The shop pays delivery for orders from this amount (null: no offer).
+  final String? freeDeliveryFrom;
+
+  /// Holiday mode: "closed until ..." (products show, but cannot be ordered). Null when open.
+  final String? holidayNotice;
 
   factory Seller.fromJson(Map<String, dynamic> j) => Seller(
         slug: _s(j['slug']),
@@ -88,6 +125,8 @@ class Seller {
         logoUrl: j['logo_url'] as String?,
         webUrl: j['web_url'] as String?,
         reliabilityScore: (j['reliability_score'] as num?)?.toInt(),
+        freeDeliveryFrom: j['free_delivery_from'] as String?,
+        holidayNotice: j['holiday_notice'] as String?,
         userId: (j['user_id'] as num?)?.toInt(),
       );
 
@@ -136,6 +175,7 @@ class Product {
     this.imageUrls = const [],
     this.imageThumbUrls = const [],
     this.genuineGuarantee = false,
+    this.isSponsored = false,
     this.videoUrl,
     this.videoSeconds,
     this.webUrl,
@@ -167,31 +207,51 @@ class Product {
         tiers: j['tiers'] is List
             ? (j['tiers'] as List)
                 .whereType<Map<String, dynamic>>()
-                .map((t) => PriceTier((t['min_quantity'] as num).toInt(), _s(t['unit_price'])))
+                .map((t) => PriceTier(
+                    (t['min_quantity'] as num).toInt(), _s(t['unit_price'])))
                 .toList()
             : [],
-        seller: j['seller'] is Map<String, dynamic> ? Seller.fromJson(j['seller'] as Map<String, dynamic>) : null,
+        seller: j['seller'] is Map<String, dynamic>
+            ? Seller.fromJson(j['seller'] as Map<String, dynamic>)
+            : null,
         description: j['description'] as String?,
         imageUrls: j['images'] is List
-            ? (j['images'] as List).whereType<Map<String, dynamic>>().map((i) => _s(i['url'])).toList()
+            ? (j['images'] as List)
+                .whereType<Map<String, dynamic>>()
+                .map((i) => _s(i['url']))
+                .toList()
             : const [],
         genuineGuarantee: j['genuine_guarantee'] == true,
+        isSponsored: j['is_sponsored'] == true,
         videoUrl: j['video_url'] as String?,
         videoSeconds: (j['video_seconds'] as num?)?.toInt(),
         imageThumbUrls: j['images'] is List
-            ? (j['images'] as List).whereType<Map<String, dynamic>>().map((i) => _s(i['thumb_url'])).toList()
+            ? (j['images'] as List)
+                .whereType<Map<String, dynamic>>()
+                .map((i) => _s(i['thumb_url']))
+                .toList()
             : const [],
         webUrl: j['web_url'] as String?,
         memberPrice: j['member_price'] as String?,
-        flashDeal: j['flash_deal'] is Map<String, dynamic> ? ProductDeal.fromJson(j['flash_deal'] as Map<String, dynamic>) : null,
+        flashDeal: j['flash_deal'] is Map<String, dynamic>
+            ? ProductDeal.fromJson(j['flash_deal'] as Map<String, dynamic>)
+            : null,
         priceCutCampaignId: (j['price_cut_campaign_id'] as num?)?.toInt(),
         trialCampaignId: (j['trial_campaign_id'] as num?)?.toInt(),
         leadTimeDays: (j['lead_time_days'] as num?)?.toInt(),
         samplePrice: j['sample_price'] as String?,
         hasBusinessPrices: j['has_business_prices'] == true,
-        variants: j['variants'] is List ? (j['variants'] as List).whereType<Map<String, dynamic>>().map(ProductOption.fromJson).toList() : const [],
+        variants: j['variants'] is List
+            ? (j['variants'] as List)
+                .whereType<Map<String, dynamic>>()
+                .map(ProductOption.fromJson)
+                .toList()
+            : const [],
         riskWarnings: j['risk_warnings'] is List
-            ? (j['risk_warnings'] as List).whereType<Map<String, dynamic>>().map((w) => _s(w['message'])).toList()
+            ? (j['risk_warnings'] as List)
+                .whereType<Map<String, dynamic>>()
+                .map((w) => _s(w['message']))
+                .toList()
             : const [],
       );
 
@@ -218,6 +278,9 @@ class Product {
 
   /// The seller promises the goods are genuine (refund plus compensation if fake).
   final bool genuineGuarantee;
+
+  /// The seller paid to show it first: always labelled "Sponsored".
+  final bool isSponsored;
 
   /// The seller's short video of the product, opened only when the buyer asks for it.
   final String? videoUrl;
@@ -270,11 +333,18 @@ class ProductDeal {
   final DateTime endsAt;
   final int maxPerOrder;
 
-  bool get isLive => state == 'live' && endsAt.isAfter(DateTime.now()) && startsAt.isBefore(DateTime.now());
+  bool get isLive =>
+      state == 'live' &&
+      endsAt.isAfter(DateTime.now()) &&
+      startsAt.isBefore(DateTime.now());
 }
 
 class Review {
-  Review({required this.rating, this.comment, this.buyer, this.isFreeTrial = false});
+  Review(
+      {required this.rating,
+      this.comment,
+      this.buyer,
+      this.isFreeTrial = false});
 
   factory Review.fromJson(Map<String, dynamic> j) => Review(
         rating: (j['rating'] as num).toInt(),
@@ -292,7 +362,8 @@ class Review {
 
 /// One option of a product ("Red, XL"), with its own stock and maybe its own price.
 class ProductOption {
-  ProductOption({required this.id, required this.name, required this.stock, this.price});
+  ProductOption(
+      {required this.id, required this.name, required this.stock, this.price});
 
   factory ProductOption.fromJson(Map<String, dynamic> j) => ProductOption(
         id: (j['id'] as num).toInt(),
@@ -310,7 +381,15 @@ class ProductOption {
 }
 
 class CartLine {
-  CartLine({required this.id, required this.quantity, required this.unitPrice, required this.lineTotal, required this.isWholesale, required this.product, this.problem, this.variantName});
+  CartLine(
+      {required this.id,
+      required this.quantity,
+      required this.unitPrice,
+      required this.lineTotal,
+      required this.isWholesale,
+      required this.product,
+      this.problem,
+      this.variantName});
 
   factory CartLine.fromJson(Map<String, dynamic> j) => CartLine(
         id: j['id'] as int,
@@ -320,7 +399,8 @@ class CartLine {
         isWholesale: j['is_wholesale_price'] == true,
         problem: j['problem'] as String?,
         product: Product.fromJson(j['product'] as Map<String, dynamic>),
-        variantName: (j['variant'] as Map<String, dynamic>?)?['name'] as String?,
+        variantName:
+            (j['variant'] as Map<String, dynamic>?)?['name'] as String?,
       );
 
   final String? variantName;
@@ -334,7 +414,8 @@ class CartLine {
 }
 
 class CartGroup {
-  CartGroup({required this.seller, required this.items, required this.subtotal});
+  CartGroup(
+      {required this.seller, required this.items, required this.subtotal});
 
   factory CartGroup.fromJson(Map<String, dynamic> j) => CartGroup(
         seller: Seller.fromJson(j['seller'] as Map<String, dynamic>),
@@ -348,7 +429,11 @@ class CartGroup {
 }
 
 class Cart {
-  Cart({required this.groups, required this.total, required this.count, required this.hasProblems});
+  Cart(
+      {required this.groups,
+      required this.total,
+      required this.count,
+      required this.hasProblems});
 
   factory Cart.fromJson(Map<String, dynamic> j) => Cart(
         groups: _list(j['groups'], CartGroup.fromJson),
@@ -366,7 +451,11 @@ class Cart {
 }
 
 class QuoteItem {
-  QuoteItem({required this.title, required this.quantity, required this.unitPrice, required this.lineTotal});
+  QuoteItem(
+      {required this.title,
+      required this.quantity,
+      required this.unitPrice,
+      required this.lineTotal});
 
   final String title;
   final int quantity;
@@ -394,7 +483,13 @@ class QuoteGroup {
     this.canStation = false,
     this.stationFee,
     this.stationDoorFee,
+    this.isInstant = false,
+    this.etaMinutes,
   });
+
+  /// Instant food: delivered in about [etaMinutes] (cooking + the ride), or at a chosen time.
+  final bool isInstant;
+  final int? etaMinutes;
 
   factory QuoteGroup.fromJson(Map<String, dynamic> j) {
     final seller = j['seller'] as Map<String, dynamic>;
@@ -426,6 +521,8 @@ class QuoteGroup {
       canStation: j['can_station'] == true,
       stationFee: j['station_fee'] as String?,
       stationDoorFee: j['station_door_fee'] as String?,
+      isInstant: j['is_instant'] == true,
+      etaMinutes: (j['eta_minutes'] as num?)?.toInt(),
     );
   }
 
@@ -477,7 +574,11 @@ class Quote {
     this.depositAmount = '0.00',
     this.stations = const [],
     this.stationId,
+    this.team,
   }) : amountDue = amountDue ?? grandTotal;
+
+  /// An office team order this checkout is for: {token, title, place, is_open, organiser_pays_delivery}.
+  final Map<String, dynamic>? team;
 
   factory Quote.fromJson(Map<String, dynamic> j) => Quote(
         groups: _list(j['groups'], QuoteGroup.fromJson),
@@ -489,12 +590,17 @@ class Quote {
         couponError: j['coupon_error'] as String?,
         passSavings: _s(j['pass_savings'] ?? '0.00'),
         isMember: j['is_member'] == true,
-        couponJson: j['coupons'] is List ? (j['coupons'] as List).whereType<Map<String, dynamic>>().toList() : const [],
+        couponJson: j['coupons'] is List
+            ? (j['coupons'] as List).whereType<Map<String, dynamic>>().toList()
+            : const [],
         canPayInParts: j['can_pay_in_parts'] == true,
         depositPercent: (j['deposit_percent'] as num?)?.toInt() ?? 30,
         depositAmount: _s(j['deposit_amount'] ?? '0.00'),
-        stations: j['stations'] is List ? (j['stations'] as List).whereType<Map<String, dynamic>>().toList() : const [],
+        stations: j['stations'] is List
+            ? (j['stations'] as List).whereType<Map<String, dynamic>>().toList()
+            : const [],
         stationId: (j['station_id'] as num?)?.toInt(),
+        team: j['team'] as Map<String, dynamic>?,
       );
 
   /// WiBuy stations the buyer can collect at, nearest first (id, name, address, district, opening_hours).
@@ -532,7 +638,16 @@ class TimelineStep {
 }
 
 class OrderItem {
-  OrderItem({required this.id, required this.title, required this.unit, required this.unitPrice, required this.quantity, required this.lineTotal, this.thumbUrl, this.reviewed, this.variantName});
+  OrderItem(
+      {required this.id,
+      required this.title,
+      required this.unit,
+      required this.unitPrice,
+      required this.quantity,
+      required this.lineTotal,
+      this.thumbUrl,
+      this.reviewed,
+      this.variantName});
 
   factory OrderItem.fromJson(Map<String, dynamic> j) => OrderItem(
         id: j['id'] as int,
@@ -550,7 +665,8 @@ class OrderItem {
   final String? variantName;
 
   /// "Shirt (Red, XL)" or just the title.
-  String get displayTitle => variantName == null ? title : '$title ($variantName)';
+  String get displayTitle =>
+      variantName == null ? title : '$title ($variantName)';
 
   final int id;
   final String title;
@@ -577,6 +693,9 @@ class Order {
     required this.canConfirmDelivery,
     required this.canReportProblem,
     required this.canReview,
+    this.canCancel = false,
+    this.repeatEveryDays,
+    this.receiptUrl,
     required this.reportProblemUrl,
     this.seller,
     this.district,
@@ -607,28 +726,43 @@ class Order {
         deliveryFee: _s(j['delivery_fee']),
         total: _s(j['total']),
         deliveryMethod: _s(j['delivery_method']),
-        seller: j['seller'] is Map<String, dynamic> ? Seller.fromJson(j['seller'] as Map<String, dynamic>) : null,
+        seller: j['seller'] is Map<String, dynamic>
+            ? Seller.fromJson(j['seller'] as Map<String, dynamic>)
+            : null,
         items: _list(j['items'], OrderItem.fromJson),
         timeline: j['timeline'] is List
             ? (j['timeline'] as List)
                 .whereType<Map<String, dynamic>>()
-                .map((t) => TimelineStep(_s(t['label']), t['at'] == null ? null : DateTime.tryParse(t['at'] as String)))
+                .map((t) => TimelineStep(
+                    _s(t['label']),
+                    t['at'] == null
+                        ? null
+                        : DateTime.tryParse(t['at'] as String)))
                 .toList()
             : [],
         canConfirmDelivery: j['can_confirm_delivery'] == true,
         canReportProblem: j['can_report_problem'] == true,
         canReview: j['can_review'] == true,
+        canCancel: j['can_cancel'] == true,
+        repeatEveryDays: (j['repeat_every_days'] as num?)?.toInt(),
+        receiptUrl: j['receipt_url'] as String?,
         reportProblemUrl: _s(j['report_problem_url']),
         district: j['district'] as String?,
         address: j['address'] as String?,
         deliveryNote: j['delivery_note'] as String?,
         rejectionReason: j['rejection_reason'] as String?,
         refundReason: j['refund_reason'] as String?,
-        createdAt: j['created_at'] == null ? null : DateTime.tryParse(j['created_at'] as String),
+        createdAt: j['created_at'] == null
+            ? null
+            : DateTime.tryParse(j['created_at'] as String),
         amountPaid: j['amount_paid'] as String?,
         discount: _s(j['discount'] ?? '0.00'),
         giftNote: j['gift_note'] as String?,
-        milestonesJson: j['milestones'] is List ? (j['milestones'] as List).whereType<Map<String, dynamic>>().toList() : const [],
+        milestonesJson: j['milestones'] is List
+            ? (j['milestones'] as List)
+                .whereType<Map<String, dynamic>>()
+                .toList()
+            : const [],
         inspectionJson: j['inspection'] as Map<String, dynamic>?,
         canPayBalance: j['can_pay_balance'] == true,
         canRequestInspection: j['can_request_inspection'] == true,
@@ -676,6 +810,15 @@ class Order {
   final bool canConfirmDelivery;
   final bool canReportProblem;
   final bool canReview;
+
+  /// Before the shop accepts, the buyer can cancel and get all the money back.
+  final bool canCancel;
+
+  /// "Remind me to order again every N days" (null: off).
+  final int? repeatEveryDays;
+
+  /// A printable receipt, once paid.
+  final String? receiptUrl;
   final String reportProblemUrl;
   final String? district;
   final String? address;
@@ -723,9 +866,14 @@ class CheckoutInfo {
 }
 
 class AppMeta {
-  AppMeta({required this.districts, required this.operators, required this.webUrl, this.mapTiles = defaultMapTiles});
+  AppMeta(
+      {required this.districts,
+      required this.operators,
+      required this.webUrl,
+      this.mapTiles = defaultMapTiles});
 
-  static const defaultMapTiles = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  static const defaultMapTiles =
+      'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
   factory AppMeta.fromJson(Map<String, dynamic> j) => AppMeta(
         districts: (j['districts'] as List).map((d) => d.toString()).toList(),
@@ -751,7 +899,8 @@ class AppMeta {
 class Paged<T> {
   Paged(this.items, this.currentPage, this.lastPage, this.total);
 
-  factory Paged.fromJson(Map<String, dynamic> j, T Function(Map<String, dynamic>) parse) {
+  factory Paged.fromJson(
+      Map<String, dynamic> j, T Function(Map<String, dynamic>) parse) {
     final meta = (j['meta'] as Map<String, dynamic>?) ?? const {};
 
     return Paged(

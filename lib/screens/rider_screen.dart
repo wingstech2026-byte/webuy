@@ -36,7 +36,8 @@ class _RiderJobsScreenState extends State<RiderJobsScreen> {
   int _version = 0;
 
   Future<void> _open(RiderJob job) async {
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => RiderJobScreen(job: job)));
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => RiderJobScreen(job: job)));
     if (mounted) setState(() => _version++);
   }
 
@@ -44,7 +45,8 @@ class _RiderJobsScreenState extends State<RiderJobsScreen> {
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('Rider jobs'), actions: [
           TextButton.icon(
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RiderEarningsScreen())),
+            onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const RiderEarningsScreen())),
             icon: const Icon(Icons.account_balance_wallet_outlined),
             label: const Text('Earnings'),
             style: TextButton.styleFrom(foregroundColor: Colors.white),
@@ -52,34 +54,63 @@ class _RiderJobsScreenState extends State<RiderJobsScreen> {
         ]),
         body: Loader<Map<String, dynamic>>(
           key: ValueKey(_version),
-          load: () async => await SessionScope.read(context).api.get('/rider/jobs') as Map<String, dynamic>,
+          load: () async => await SessionScope.read(context)
+              .api
+              .get('/rider/jobs') as Map<String, dynamic>,
           builder: (context, json, reload) {
-            final mine = (json['mine'] as List).whereType<Map<String, dynamic>>().map(RiderJob.new).toList();
-            final open = (json['open'] as List).whereType<Map<String, dynamic>>().map(RiderJob.new).toList();
+            final mine = (json['mine'] as List)
+                .whereType<Map<String, dynamic>>()
+                .map(RiderJob.new)
+                .toList();
+            final open = (json['open'] as List)
+                .whereType<Map<String, dynamic>>()
+                .map(RiderJob.new)
+                .toList();
             return RefreshIndicator(
               onRefresh: reload,
               child: ListView(padding: const EdgeInsets.all(12), children: [
-                Text('${json['delivered_count']} delivered · ${formatLe(json['delivered_fees'] as String?)} in delivery fees',
+                Text(
+                    '${json['delivered_count']} delivered · ${formatLe(json['delivered_fees'] as String?)} in delivery fees',
                     style: const TextStyle(color: WiBuyColors.muted)),
+                _AvailableCard(until: json['available_until'] as String?, onChanged: () => setState(() => _version++)),
                 if (mine.isNotEmpty) ...[
-                  const Padding(padding: EdgeInsets.fromLTRB(2, 14, 2, 6), child: Text('My deliveries', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
+                  const Padding(
+                      padding: EdgeInsets.fromLTRB(2, 14, 2, 6),
+                      child: Text('My deliveries',
+                          style: TextStyle(
+                              fontSize: 17, fontWeight: FontWeight.w800))),
                   for (final job in mine)
                     Card(
                       child: ListTile(
-                        title: Text('${job.get('order_number')} · ${job.get('pickup_name')} → ${job.get('dropoff_district') ?? ''}'),
+                        title: Text(
+                            '${job.get('order_number')} · ${job.get('pickup_name')} → ${job.get('dropoff_district') ?? ''}'),
                         subtitle: Text(job.statusLabel),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => _open(job),
                       ),
                     ),
                 ],
-                const Padding(padding: EdgeInsets.fromLTRB(2, 14, 2, 6), child: Text('Open jobs', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
-                if (open.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(14), child: Text('No open jobs right now. Pull down to refresh.'))),
+                const Padding(
+                    padding: EdgeInsets.fromLTRB(2, 14, 2, 6),
+                    child: Text('Open jobs',
+                        style: TextStyle(
+                            fontSize: 17, fontWeight: FontWeight.w800))),
+                if (open.isEmpty)
+                  const Card(
+                      child: Padding(
+                          padding: EdgeInsets.all(14),
+                          child: Text(
+                              'No open jobs right now. Pull down to refresh.'))),
                 for (final job in open)
                   Card(
                     child: ListTile(
-                      title: Text(formatLe(job.fee), style: const TextStyle(fontWeight: FontWeight.w800, color: WiBuyColors.green)),
-                      subtitle: Text('From ${job.get('pickup_name')} (${job.get('pickup_address') ?? ''}) → ${job.get('dropoff_district') ?? '?'}'),
+                      leading: job.json['is_instant'] == true ? const Text('⚡', style: TextStyle(fontSize: 24)) : null,
+                      title: Text(formatLe(job.fee),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: WiBuyColors.green)),
+                      subtitle: Text(
+                          'From ${job.get('pickup_name')} (${job.get('pickup_address') ?? ''}) → ${job.get('dropoff_district') ?? '?'}'),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => _open(job),
                     ),
@@ -89,6 +120,49 @@ class _RiderJobsScreenState extends State<RiderJobsScreen> {
           },
         ),
       );
+}
+
+/// "I'm available": food shops near the rider call them. Their spot is shared once, kept 3 hours at most.
+class _AvailableCard extends StatelessWidget {
+  const _AvailableCard({required this.until, required this.onChanged});
+
+  final String? until;
+  final VoidCallback onChanged;
+
+  Future<void> _set(BuildContext context, bool on) async {
+    final api = SessionScope.read(context).api;
+    try {
+      if (on) {
+        final here = await RiderJobScreen.locate();
+        if (here == null) {
+          if (context.mounted) showMessage(context, 'Allow location so food shops near you can call you.');
+          return;
+        }
+        await api.post('/rider/available', {'lat': here.latitude, 'lng': here.longitude});
+      } else {
+        await api.post('/rider/available', {});
+      }
+      onChanged();
+    } on Object catch (e) {
+      if (context.mounted) showMessage(context, e);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final end = until == null ? null : DateTime.tryParse(until!)?.toLocal();
+
+    return Card(
+      child: ListTile(
+        leading: Icon(end != null ? Icons.circle : Icons.circle_outlined, color: end != null ? WiBuyColors.green : WiBuyColors.muted),
+        title: Text(end != null ? 'Available for food jobs until ${end.hour.toString().padLeft(2, '0')}:${end.minute.toString().padLeft(2, '0')}' : 'Want food jobs near you?'),
+        subtitle: const Text('Shops near you call you first. Your location is shared once, for 3 hours.'),
+        trailing: end != null
+            ? OutlinedButton(onPressed: () => _set(context, false), child: const Text("I'm off"))
+            : FilledButton(onPressed: () => _set(context, true), child: const Text("I'm available")),
+      ),
+    );
+  }
 }
 
 /// One delivery, step by step: take it, collected, delivered (code, or photo when there is no code).
@@ -132,7 +206,8 @@ class _RiderJobScreenState extends State<RiderJobScreen> {
   void _followSharing() {
     final carrying = _job.status == 'picked_up';
     if (carrying && _sharing == null) {
-      _sharing = Timer.periodic(const Duration(seconds: 20), (_) => _shareLocation());
+      _sharing =
+          Timer.periodic(const Duration(seconds: 20), (_) => _shareLocation());
       _shareLocation();
     } else if (!carrying) {
       _sharing?.cancel();
@@ -144,12 +219,17 @@ class _RiderJobScreenState extends State<RiderJobScreen> {
     final point = await RiderJobScreen.locate();
     if (!mounted) return;
     if (point == null) {
-      setState(() => _sharingText = 'Allow location for WiBuy so the buyer can see you are on the way.');
+      setState(() => _sharingText =
+          'Allow location for WiBuy so the buyer can see you are on the way.');
       return;
     }
     try {
-      await SessionScope.read(context).api.post('/rider/jobs/${_job.id}/location', {'lat': point.latitude, 'lng': point.longitude});
-      if (mounted) setState(() => _sharingText = 'Sharing your location with the buyer (${TimeOfDay.now().format(context)}). It stops when you deliver.');
+      await SessionScope.read(context).api.post(
+          '/rider/jobs/${_job.id}/location',
+          {'lat': point.latitude, 'lng': point.longitude});
+      if (mounted)
+        setState(() => _sharingText =
+            'Sharing your location with the buyer (${TimeOfDay.now().format(context)}). It stops when you deliver.');
     } on Object {
       // A missed update is fine: the next one comes in 20 seconds.
     }
@@ -160,8 +240,13 @@ class _RiderJobScreenState extends State<RiderJobScreen> {
     try {
       final api = SessionScope.read(context).api;
       final json = (action == 'deliver' && _photos.isNotEmpty
-          ? await api.postMultipart('/rider/jobs/${_job.id}/deliver', {'note': _note.text.trim()}, {'photo': [for (final p in _photos.take(1)) (p.$1, p.$2)]})
-          : await api.post('/rider/jobs/${_job.id}/$action', body)) as Map<String, dynamic>;
+              ? await api.postMultipart('/rider/jobs/${_job.id}/deliver', {
+                  'note': _note.text.trim()
+                }, {
+                  'photo': [for (final p in _photos.take(1)) (p.$1, p.$2)]
+                })
+              : await api.post('/rider/jobs/${_job.id}/$action', body))
+          as Map<String, dynamic>;
       if (!mounted) return;
       if (action == 'release') {
         Navigator.of(context).pop();
@@ -183,31 +268,59 @@ class _RiderJobScreenState extends State<RiderJobScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(job.get('order_number') ?? 'Delivery job')),
       body: ListView(padding: const EdgeInsets.all(14), children: [
-        Text(job.statusLabel, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+        Text(job.statusLabel,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
-        Text('Pay: ${formatLe(job.fee)}', style: const TextStyle(fontWeight: FontWeight.w700, color: WiBuyColors.green)),
+        Text('Pay: ${formatLe(job.fee)}',
+            style: const TextStyle(
+                fontWeight: FontWeight.w700, color: WiBuyColors.green)),
         const SizedBox(height: 6),
-        Text('Collect at: ${job.get('pickup_name')}, ${job.get('pickup_address') ?? ''}'),
+        Text(
+            'Collect at: ${job.get('pickup_name')}, ${job.get('pickup_address') ?? ''}'),
         const SizedBox(height: 6),
         if (job.isMine) ...[
-          Text('Deliver to: ${job.get('buyer_name')}, ${displayPhone(job.get('buyer_phone'))}'),
-          Text('${job.get('dropoff_address') ?? ''} (${job.get('dropoff_district') ?? ''})'),
-          if (job.get('items') != null) Text(job.get('items')!, style: const TextStyle(color: WiBuyColors.muted)),
+          Text(
+              'Deliver to: ${job.get('buyer_name')}, ${displayPhone(job.get('buyer_phone'))}'),
+          Text(
+              '${job.get('dropoff_address') ?? ''} (${job.get('dropoff_district') ?? ''})'),
+          if (job.get('items') != null)
+            Text(job.get('items')!,
+                style: const TextStyle(color: WiBuyColors.muted)),
         ] else
-          Text('Deliver to: ${job.get('dropoff_district') ?? '?'} (the address shows after you take the job)'),
+          Text(
+              'Deliver to: ${job.get('dropoff_district') ?? '?'} (the address shows after you take the job)'),
         const SizedBox(height: 18),
-        if (job.status == 'open') FilledButton(onPressed: _busy ? null : () => _act('accept'), child: const Text('Take this job')),
-        if (job.status == 'assigned') ...[
-          FilledButton(onPressed: _busy ? null : () => _act('picked-up'), child: const Text('I collected it at the shop')),
+        if (job.status == 'open')
+          FilledButton(
+              onPressed: _busy ? null : () => _act('accept'),
+              child: const Text('Take this job')),
+        if (job.status == 'open' &&
+            ((job.json['same_route_open'] as num?) ?? 0) > 1) ...[
           const SizedBox(height: 8),
-          OutlinedButton(onPressed: _busy ? null : () => _act('release'), child: const Text('Give the job back')),
+          OutlinedButton(
+            onPressed: _busy ? null : () => _act('accept-route'),
+            child: Text(
+                'Take all ${job.json['same_route_open']} parcels on this route (one trip)'),
+          ),
+        ],
+        if (job.status == 'assigned') ...[
+          FilledButton(
+              onPressed: _busy ? null : () => _act('picked-up'),
+              child: const Text('I collected it at the shop')),
+          const SizedBox(height: 8),
+          OutlinedButton(
+              onPressed: _busy ? null : () => _act('release'),
+              child: const Text('Give the job back')),
         ],
         if (job.status == 'picked_up')
           Container(
             margin: const EdgeInsets.only(bottom: 10),
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: const Color(0xFFFFF7E6), borderRadius: BorderRadius.circular(10)),
-            child: Text('📍 ${_sharingText ?? 'Keep this screen open: your location is shared with the buyer while you carry this parcel. It stops when you deliver.'}'),
+            decoration: BoxDecoration(
+                color: const Color(0xFFFFF7E6),
+                borderRadius: BorderRadius.circular(10)),
+            child: Text(
+                '📍 ${_sharingText ?? 'Keep this screen open: your location is shared with the buyer while you carry this parcel. It stops when you deliver.'}'),
           ),
         if (job.status == 'picked_up') ...[
           TextField(
@@ -216,16 +329,37 @@ class _RiderJobScreenState extends State<RiderJobScreen> {
             maxLength: 4,
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 26, letterSpacing: 8),
-            decoration: InputDecoration(labelText: "The buyer's 4-digit code", helperText: '${job.get('code_attempts_left')} tries left'),
+            decoration: InputDecoration(
+                labelText: "The buyer's 4-digit code",
+                helperText: '${job.get('code_attempts_left')} tries left'),
           ),
-          FilledButton(onPressed: _busy ? null : () => _act('deliver', body: {'code': _code.text.trim()}), child: const Text('Delivered')),
+          FilledButton(
+              onPressed: _busy
+                  ? null
+                  : () => _act('deliver', body: {'code': _code.text.trim()}),
+              child: const Text('Delivered')),
           const Divider(height: 32),
-          const Text('The buyer cannot give the code? Take a photo of the handover instead.', style: TextStyle(fontWeight: FontWeight.w600)),
-          PhotoPicker(onChanged: (p) => setState(() => _photos = p), label: 'Handover photo'),
-          TextField(controller: _note, maxLength: 300, decoration: const InputDecoration(labelText: 'Who received it?')),
-          OutlinedButton(onPressed: _busy || _photos.isEmpty ? null : () => _act('deliver'), child: const Text('Delivered (photo)')),
+          const Text(
+              'The buyer cannot give the code? Take a photo of the handover instead.',
+              style: TextStyle(fontWeight: FontWeight.w600)),
+          PhotoPicker(
+              onChanged: (p) => setState(() => _photos = p),
+              label: 'Handover photo'),
+          TextField(
+              controller: _note,
+              maxLength: 300,
+              decoration: const InputDecoration(labelText: 'Who received it?')),
+          OutlinedButton(
+              onPressed:
+                  _busy || _photos.isEmpty ? null : () => _act('deliver'),
+              child: const Text('Delivered (photo)')),
         ],
-        if (job.status == 'delivered') const Text('Delivered ✓ Thank you.', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: WiBuyColors.green)),
+        if (job.status == 'delivered')
+          const Text('Delivered ✓ Thank you.',
+              style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: WiBuyColors.green)),
       ]),
     );
   }
@@ -256,9 +390,14 @@ class _RiderEarningsScreenState extends State<RiderEarningsScreen> {
   Future<void> _withdraw() async {
     setState(() => _busy = true);
     try {
-      await SessionScope.read(context).api.post('/rider/payouts', {'amount': _amount.text.trim(), 'operator': _operator, 'phone': _phone.text.trim()});
+      await SessionScope.read(context).api.post('/rider/payouts', {
+        'amount': _amount.text.trim(),
+        'operator': _operator,
+        'phone': _phone.text.trim()
+      });
       if (!mounted) return;
-      showMessage(context, 'Payout requested. We will check it and send it to your mobile money.');
+      showMessage(context,
+          'Payout requested. We will check it and send it to your mobile money.');
       setState(() {
         _amount.clear();
         _version++;
@@ -274,9 +413,16 @@ class _RiderEarningsScreenState extends State<RiderEarningsScreen> {
         child: Card(
           child: Padding(
             padding: const EdgeInsets.all(10),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(label, style: const TextStyle(color: WiBuyColors.muted, fontSize: 12)),
-              Text(formatLe(amount), style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: strong ? WiBuyColors.green : null)),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label,
+                  style:
+                      const TextStyle(color: WiBuyColors.muted, fontSize: 12)),
+              Text(formatLe(amount),
+                  style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                      color: strong ? WiBuyColors.green : null)),
             ]),
           ),
         ),
@@ -287,57 +433,106 @@ class _RiderEarningsScreenState extends State<RiderEarningsScreen> {
         appBar: AppBar(title: const Text('My earnings')),
         body: Loader<Map<String, dynamic>>(
           key: ValueKey(_version),
-          load: () async => await SessionScope.read(context).api.get('/rider/earnings') as Map<String, dynamic>,
+          load: () async => await SessionScope.read(context)
+              .api
+              .get('/rider/earnings') as Map<String, dynamic>,
           builder: (context, json, reload) {
             final money = json['money'] as Map<String, dynamic>;
             final payTo = json['pay_to'] as Map<String, dynamic>;
             _operator ??= payTo['operator'] as String? ?? 'ORANGE';
-            if (_phone.text.isEmpty) _phone.text = displayPhone(payTo['phone'] as String?);
-            final payouts = (json['payouts'] as List).whereType<Map<String, dynamic>>();
-            final entries = (json['entries'] as List).whereType<Map<String, dynamic>>();
+            if (_phone.text.isEmpty)
+              _phone.text = displayPhone(payTo['phone'] as String?);
+            final payouts =
+                (json['payouts'] as List).whereType<Map<String, dynamic>>();
+            final entries =
+                (json['entries'] as List).whereType<Map<String, dynamic>>();
 
             return RefreshIndicator(
               onRefresh: reload,
               child: ListView(padding: const EdgeInsets.all(12), children: [
-                const Text('You earn the delivery fee once the buyer confirms the order.', style: TextStyle(color: WiBuyColors.muted)),
+                const Text(
+                    'You earn the delivery fee once the buyer confirms the order.',
+                    style: TextStyle(color: WiBuyColors.muted)),
                 const SizedBox(height: 8),
-                Row(children: [_tile('Available', money['available'] as String?, strong: true), _tile('Pending', money['pending'] as String?)]),
-                Row(children: [_tile('On the way', money['in_transit'] as String?), _tile('Paid out', money['paid_out'] as String?)]),
-                const Padding(padding: EdgeInsets.fromLTRB(2, 14, 2, 6), child: Text('Withdraw to mobile money', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
+                Row(children: [
+                  _tile('Available', money['available'] as String?,
+                      strong: true),
+                  _tile('Pending', money['pending'] as String?)
+                ]),
+                Row(children: [
+                  _tile('On the way', money['in_transit'] as String?),
+                  _tile('Paid out', money['paid_out'] as String?)
+                ]),
+                const Padding(
+                    padding: EdgeInsets.fromLTRB(2, 14, 2, 6),
+                    child: Text('Withdraw to mobile money',
+                        style: TextStyle(
+                            fontSize: 17, fontWeight: FontWeight.w800))),
                 SegmentedButton<String>(
-                  segments: const [ButtonSegment(value: 'ORANGE', label: Text('Orange Money')), ButtonSegment(value: 'AFRIMONEY', label: Text('Afrimoney'))],
+                  segments: const [
+                    ButtonSegment(value: 'ORANGE', label: Text('Orange Money')),
+                    ButtonSegment(value: 'AFRIMONEY', label: Text('Afrimoney'))
+                  ],
                   selected: {_operator!},
-                  onSelectionChanged: (s) => setState(() => _operator = s.first),
+                  onSelectionChanged: (s) =>
+                      setState(() => _operator = s.first),
                 ),
                 const SizedBox(height: 8),
-                TextField(controller: _phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Mobile money number')),
+                TextField(
+                    controller: _phone,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                        labelText: 'Mobile money number')),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _amount,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(labelText: 'Amount', helperText: 'Minimum ${formatLe(json['min_payout'] as String?)}'),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                      labelText: 'Amount',
+                      helperText:
+                          'Minimum ${formatLe(json['min_payout'] as String?)}'),
                 ),
                 const SizedBox(height: 8),
-                FilledButton(onPressed: _busy ? null : _withdraw, child: const Text('Withdraw')),
+                FilledButton(
+                    onPressed: _busy ? null : _withdraw,
+                    child: const Text('Withdraw')),
                 if (payouts.isNotEmpty) ...[
-                  const Padding(padding: EdgeInsets.fromLTRB(2, 18, 2, 6), child: Text('Payouts', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
+                  const Padding(
+                      padding: EdgeInsets.fromLTRB(2, 18, 2, 6),
+                      child: Text('Payouts',
+                          style: TextStyle(
+                              fontSize: 17, fontWeight: FontWeight.w800))),
                   for (final p in payouts)
                     Card(
                       child: ListTile(
-                        title: Text(formatLe(p['amount'] as String?), style: const TextStyle(fontWeight: FontWeight.w700)),
-                        subtitle: Text('${p['operator']} ${displayPhone(p['phone'] as String?)}${p['rejection_reason'] != null ? '\n${p['rejection_reason']}' : ''}'),
+                        title: Text(formatLe(p['amount'] as String?),
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w700)),
+                        subtitle: Text(
+                            '${p['operator']} ${displayPhone(p['phone'] as String?)}${p['rejection_reason'] != null ? '\n${p['rejection_reason']}' : ''}'),
                         trailing: Text(p['status_label'] as String),
                       ),
                     ),
                 ],
-                const Padding(padding: EdgeInsets.fromLTRB(2, 18, 2, 6), child: Text('Credits and debits', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
-                if (entries.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(14), child: Text('Nothing yet. Delivery fees are added here when an order completes.'))),
+                const Padding(
+                    padding: EdgeInsets.fromLTRB(2, 18, 2, 6),
+                    child: Text('Credits and debits',
+                        style: TextStyle(
+                            fontSize: 17, fontWeight: FontWeight.w800))),
+                if (entries.isEmpty)
+                  const Card(
+                      child: Padding(
+                          padding: EdgeInsets.all(14),
+                          child: Text(
+                              'Nothing yet. Delivery fees are added here when an order completes.'))),
                 for (final e in entries)
                   ListTile(
                     dense: true,
                     title: Text(e['type'] as String),
                     subtitle: Text(e['description'] as String),
-                    trailing: Text(formatLe(e['amount'] as String?), style: const TextStyle(fontWeight: FontWeight.w700)),
+                    trailing: Text(formatLe(e['amount'] as String?),
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
                   ),
               ]),
             );

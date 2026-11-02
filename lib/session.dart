@@ -26,7 +26,9 @@ class Session extends ChangeNotifier {
     var device = _prefs.getString(_deviceKey);
     if (device == null) {
       final random = Random.secure();
-      device = List.generate(16, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+      device = List.generate(
+              16, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'))
+          .join();
       _prefs.setString(_deviceKey, device);
     }
     api.deviceId = device;
@@ -81,10 +83,12 @@ class Session extends ChangeNotifier {
   }
 
   /// Products looked at on this phone (slugs, most recent first). Kept only on the phone.
-  List<String> get recentlyViewed => _prefs.getStringList(_recentKey) ?? const [];
+  List<String> get recentlyViewed =>
+      _prefs.getStringList(_recentKey) ?? const [];
 
   void viewed(String slug) {
-    final list = [slug, ...recentlyViewed.where((s) => s != slug)].take(20).toList();
+    final list =
+        [slug, ...recentlyViewed.where((s) => s != slug)].take(20).toList();
     _prefs.setStringList(_recentKey, list);
   }
 
@@ -121,7 +125,8 @@ class Session extends ChangeNotifier {
   Future<void> refreshCounts() async {
     if (!isLoggedIn) return;
     try {
-      final json = await api.get('/notifications/counts') as Map<String, dynamic>;
+      final json =
+          await api.get('/notifications/counts') as Map<String, dynamic>;
       final n = (json['notifications'] as num?)?.toInt() ?? 0;
       final c = (json['chat'] as num?)?.toInt() ?? 0;
       if (n != notificationCount || c != chatCount) {
@@ -161,11 +166,14 @@ class Session extends ChangeNotifier {
       await api.post('/auth/code', {'phone': phone}) as Map<String, dynamic>;
 
   /// Step 2: check the code and keep the token.
-  Future<void> verify(String phone, String code, {String? name}) async {
+  Future<void> verify(String phone, String code,
+      {String? name, String? district, String? area}) async {
     final result = await api.post('/auth/verify', {
       'phone': phone,
       'code': code,
       if (name != null && name.isNotEmpty) 'name': name,
+      if (district != null) 'district': district,
+      if (area != null && area.isNotEmpty) 'area': area,
       if (referralCode != null) 'referral_code': referralCode,
       'device_name': 'WiBuy app (${defaultTargetPlatform.name})',
     }) as Map<String, dynamic>;
@@ -174,6 +182,18 @@ class Session extends ChangeNotifier {
     await _prefs.setString(_tokenKey, api.token!);
     await _saveUser(User.fromJson(result['user'] as Map<String, dynamic>));
     await refreshCartCount();
+    notifyListeners();
+  }
+
+  /// "My details": name and where they live.
+  Future<void> updateDetails(
+      {required String name,
+      required String district,
+      required String area}) async {
+    final json = await api
+            .post('/me', {'name': name, 'district': district, 'area': area})
+        as Map<String, dynamic>;
+    await _saveUser(User.fromJson(json['data'] as Map<String, dynamic>));
     notifyListeners();
   }
 
@@ -222,10 +242,14 @@ class Session extends ChangeNotifier {
 
 /// Gives every screen the Session without extra packages.
 class SessionScope extends InheritedNotifier<Session> {
-  const SessionScope({super.key, required Session session, required super.child}) : super(notifier: session);
+  const SessionScope(
+      {super.key, required Session session, required super.child})
+      : super(notifier: session);
 
-  static Session of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<SessionScope>()!.notifier!;
+  static Session of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<SessionScope>()!.notifier!;
 
   /// For button handlers: no rebuild subscription.
-  static Session read(BuildContext context) => context.getInheritedWidgetOfExactType<SessionScope>()!.notifier!;
+  static Session read(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<SessionScope>()!.notifier!;
 }

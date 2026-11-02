@@ -17,10 +17,22 @@ import 'trials_screen.dart';
 class ProductDetail {
   ProductDetail(Map<String, dynamic> j)
       : product = Product.fromJson(j['data'] as Map<String, dynamic>),
-        reviews = (j['reviews'] as List).whereType<Map<String, dynamic>>().map(Review.fromJson).toList(),
-        alsoBought = ((j['also_bought'] as List?) ?? const []).whereType<Map<String, dynamic>>().map(Product.fromJson).toList();
+        reviews = (j['reviews'] as List)
+            .whereType<Map<String, dynamic>>()
+            .map(Review.fromJson)
+            .toList(),
+        alsoBought = ((j['also_bought'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(Product.fromJson)
+            .toList(),
+        questions = ((j['questions'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .toList();
 
   final Product product;
+
+  /// Answered questions about the product: {question, answer, answered_at}.
+  final List<Map<String, dynamic>> questions;
   final List<Review> reviews;
 
   /// What other buyers of this product also paid for.
@@ -39,7 +51,8 @@ class ProductScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Product')),
       body: Loader<ProductDetail>(
-        load: () async => ProductDetail(await api.get('/products/$slug') as Map<String, dynamic>),
+        load: () async => ProductDetail(
+            await api.get('/products/$slug') as Map<String, dynamic>),
         builder: (context, data, _) => _ProductBody(data),
       ),
     );
@@ -66,6 +79,7 @@ class _ProductBodyState extends State<_ProductBody> {
     super.initState();
     SessionScope.read(context).viewed(widget.data.product.slug);
   }
+
   bool _busy = false;
 
   Product get p => widget.data.product;
@@ -82,7 +96,10 @@ class _ProductBodyState extends State<_ProductBody> {
       }
     }
     final deal = p.flashDeal;
-    if (deal != null && deal.isLive && _qty <= deal.maxPerOrder && _cents(deal.dealPrice) < _cents(price)) {
+    if (deal != null &&
+        deal.isLive &&
+        _qty <= deal.maxPerOrder &&
+        _cents(deal.dealPrice) < _cents(price)) {
       price = deal.dealPrice;
     }
     return price;
@@ -90,7 +107,10 @@ class _ProductBodyState extends State<_ProductBody> {
 
   static int _cents(String amount) {
     final parts = amount.split('.');
-    return int.parse(parts[0]) * 100 + int.parse((parts.length > 1 ? parts[1] : '0').padRight(2, '0').substring(0, 2));
+    return int.parse(parts[0]) * 100 +
+        int.parse((parts.length > 1 ? parts[1] : '0')
+            .padRight(2, '0')
+            .substring(0, 2));
   }
 
   bool _optionMissing() {
@@ -105,7 +125,10 @@ class _ProductBodyState extends State<_ProductBody> {
     final session = SessionScope.read(context);
     setState(() => _busy = true);
     try {
-      final cart = await session.api.post('/cart/${p.slug}', {'quantity': _qty, if (_option != null) 'variant': _option!.id}) as Map<String, dynamic>;
+      final cart = await session.api.post('/cart/${p.slug}', {
+        'quantity': _qty,
+        if (_option != null) 'variant': _option!.id
+      }) as Map<String, dynamic>;
       session.setCartCount((cart['count'] as num?)?.toInt() ?? 0);
       if (mounted) showMessage(context, 'Added to your cart.');
     } on Object catch (e) {
@@ -118,14 +141,66 @@ class _ProductBodyState extends State<_ProductBody> {
   Future<void> _buyNow() async {
     if (_optionMissing()) return;
     if (!await ensureLoggedIn(context) || !mounted) return;
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => CheckoutScreen(productSlug: p.slug, quantity: _qty, variantId: _option?.id)));
+    Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => CheckoutScreen(
+            productSlug: p.slug, quantity: _qty, variantId: _option?.id)));
   }
 
   Future<void> _toggleSave() async {
     if (!await ensureLoggedIn(context) || !mounted) return;
     try {
-      final result = await SessionScope.read(context).api.post('/wishlist/${p.slug}') as Map<String, dynamic>;
-      if (mounted) showMessage(context, result['saved'] == true ? 'Saved to your wishlist.' : 'Removed from your wishlist.');
+      final result = await SessionScope.read(context)
+          .api
+          .post('/wishlist/${p.slug}') as Map<String, dynamic>;
+      if (mounted)
+        showMessage(
+            context,
+            result['saved'] == true
+                ? 'Saved to your wishlist.'
+                : 'Removed from your wishlist.');
+    } on Object catch (e) {
+      if (mounted) showMessage(context, e);
+    }
+  }
+
+  /// Ask the shop a question; it shows here for everyone once answered.
+  Future<void> _ask() async {
+    if (!SessionScope.read(context).isLoggedIn) {
+      showMessage(context, 'Log in to ask the shop a question.');
+      return;
+    }
+    final text = TextEditingController();
+    final question = await showDialog<String>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Ask the shop'),
+        content: TextField(
+          controller: text,
+          autofocus: true,
+          maxLength: 500,
+          maxLines: 3,
+          decoration: const InputDecoration(
+              hintText: 'Does it come with a charger?',
+              helperText: 'No phone numbers: keep it to the product.'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialog),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(dialog, text.text.trim()),
+              child: const Text('Send')),
+        ],
+      ),
+    );
+    if (question == null || question.isEmpty || !mounted) return;
+    try {
+      await SessionScope.read(context)
+          .api
+          .post('/products/${p.slug}/questions', {'question': question});
+      if (mounted)
+        showMessage(
+            context, 'Question sent. You will be told when the shop answers.');
     } on Object catch (e) {
       if (mounted) showMessage(context, e);
     }
@@ -137,13 +212,15 @@ class _ProductBodyState extends State<_ProductBody> {
       shareOnWhatsApp(context, 'product', target: p.slug);
       return;
     }
-    final text = Uri.encodeComponent('${p.title} - ${formatLe(p.price)} on WiBuy ${p.webUrl ?? ''}');
+    final text = Uri.encodeComponent(
+        '${p.title} - ${formatLe(p.price)} on WiBuy ${p.webUrl ?? ''}');
     openLink(context, 'https://wa.me/?text=$text');
   }
 
   @override
   Widget build(BuildContext context) {
-    final full = SessionScope.of(context).dataSaver ? p.imageThumbUrls : p.imageUrls;
+    final full =
+        SessionScope.of(context).dataSaver ? p.imageThumbUrls : p.imageUrls;
     final images = full.isEmpty ? <String?>[p.thumbUrl] : full;
     final stock = _option?.stock ?? p.stock;
     final outOfStock = stock < 1;
@@ -154,17 +231,35 @@ class _ProductBodyState extends State<_ProductBody> {
         child: ListView(children: [
           AspectRatio(
             aspectRatio: 1,
-            child: PageView(children: [for (final url in images) Photo(url, radius: 0)]),
+            child: PageView(
+                children: [for (final url in images) Photo(url, radius: 0)]),
           ),
           Padding(
             padding: const EdgeInsets.all(16),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(p.title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(p.title,
+                  style: const TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.w700)),
+              if (p.seller?.freeDeliveryFrom != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                      '🚚 Free delivery from ${formatLe(p.seller!.freeDeliveryFrom)} in this shop',
+                      style: const TextStyle(
+                          color: WiBuyColors.orange,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13)),
+                ),
               if (p.genuineGuarantee)
                 const Padding(
                   padding: EdgeInsets.only(top: 4),
-                  child: Text('✅ Genuine guarantee: if it is fake, you get your money back plus compensation',
-                      style: TextStyle(color: WiBuyColors.green, fontWeight: FontWeight.w700, fontSize: 13)),
+                  child: Text(
+                      '✅ Genuine guarantee: if it is fake, you get your money back plus compensation',
+                      style: TextStyle(
+                          color: WiBuyColors.green,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13)),
                 ),
               if (p.videoUrl != null)
                 Align(
@@ -173,47 +268,78 @@ class _ProductBodyState extends State<_ProductBody> {
                     // Opens in the phone's video player: nothing downloads until the buyer taps.
                     onPressed: () => openLink(context, p.videoUrl!),
                     icon: const Icon(Icons.play_circle_outline),
-                    label: Text("Watch the seller's video${p.videoSeconds != null ? ' (${p.videoSeconds}s)' : ''}"),
+                    label: Text(
+                        "Watch the seller's video${p.videoSeconds != null ? ' (${p.videoSeconds}s)' : ''}"),
                   ),
                 ),
               const SizedBox(height: 8),
               Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                Text(formatLe(_unitPrice), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: WiBuyColors.green)),
-                Text(' / ${p.unit}', style: const TextStyle(color: WiBuyColors.muted)),
+                Text(formatLe(_unitPrice),
+                    style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        color: WiBuyColors.green)),
+                Text(' / ${p.unit}',
+                    style: const TextStyle(color: WiBuyColors.muted)),
                 if (p.compareAtPrice != null) ...[
                   const SizedBox(width: 8),
                   Text(formatLe(p.compareAtPrice),
-                      style: const TextStyle(decoration: TextDecoration.lineThrough, color: WiBuyColors.muted)),
+                      style: const TextStyle(
+                          decoration: TextDecoration.lineThrough,
+                          color: WiBuyColors.muted)),
                 ],
               ]),
               if (p.flashDeal != null)
                 Container(
                   margin: const EdgeInsets.only(top: 6),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(color: const Color(0xFFFFEDD5), borderRadius: BorderRadius.circular(8)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFFFFEDD5),
+                      borderRadius: BorderRadius.circular(8)),
                   child: Row(children: [
-                    const Text('⚡ Lightning deal ', style: TextStyle(fontWeight: FontWeight.w800, color: WiBuyColors.orange)),
-                    Text(formatLe(p.flashDeal!.dealPrice), style: const TextStyle(fontWeight: FontWeight.w800)),
+                    const Text('⚡ Lightning deal ',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: WiBuyColors.orange)),
+                    Text(formatLe(p.flashDeal!.dealPrice),
+                        style: const TextStyle(fontWeight: FontWeight.w800)),
                     const Spacer(),
-                    Countdown(p.flashDeal!.isLive ? p.flashDeal!.endsAt : p.flashDeal!.startsAt,
-                        prefix: p.flashDeal!.isLive ? 'ends ' : 'starts ', style: const TextStyle(fontSize: 13)),
+                    Countdown(
+                        p.flashDeal!.isLive
+                            ? p.flashDeal!.endsAt
+                            : p.flashDeal!.startsAt,
+                        prefix: p.flashDeal!.isLive ? 'ends ' : 'starts ',
+                        style: const TextStyle(fontSize: 13)),
                   ]),
                 ),
               for (final warning in p.riskWarnings)
                 Container(
                   margin: const EdgeInsets.only(top: 6),
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(8)),
-                  child: Text('⚠️ $warning', style: const TextStyle(fontWeight: FontWeight.w600)),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(8)),
+                  child: Text('⚠️ $warning',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
                 ),
               if (p.leadTimeDays != null)
-                Padding(padding: const EdgeInsets.only(top: 4), child: Text('🛠️ Made to order: ready in ${p.leadTimeDays} days')),
+                Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                        '🛠️ Made to order: ready in ${p.leadTimeDays} days')),
               if (p.hasBusinessPrices)
-                const Padding(padding: EdgeInsets.only(top: 4), child: Text('🏢 Lower prices for verified business buyers', style: TextStyle(color: WiBuyColors.muted))),
+                const Padding(
+                    padding: EdgeInsets.only(top: 4),
+                    child: Text('🏢 Lower prices for verified business buyers',
+                        style: TextStyle(color: WiBuyColors.muted))),
               if (p.memberPrice != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
-                  child: Text('⭐ ${formatLe(p.memberPrice)} with WiBuy Pass', style: const TextStyle(color: WiBuyColors.green, fontWeight: FontWeight.w700)),
+                  child: Text('⭐ ${formatLe(p.memberPrice)} with WiBuy Pass',
+                      style: const TextStyle(
+                          color: WiBuyColors.green,
+                          fontWeight: FontWeight.w700)),
                 ),
               const SizedBox(height: 4),
               Text(
@@ -225,23 +351,36 @@ class _ProductBodyState extends State<_ProductBody> {
                 const SizedBox(height: 14),
                 Container(
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(12)),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('Buy more, pay less', style: TextStyle(fontWeight: FontWeight.w800, color: WiBuyColors.orange)),
-                    const SizedBox(height: 6),
-                    Text('1 – ${p.tiers.first.minQuantity - 1}: ${formatLe(p.price)} each'),
-                    for (final tier in p.tiers) Text('${tier.minQuantity}+: ${formatLe(tier.unitPrice)} each'),
-                  ]),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7ED),
+                      borderRadius: BorderRadius.circular(12)),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Buy more, pay less',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: WiBuyColors.orange)),
+                        const SizedBox(height: 6),
+                        Text(
+                            '1 – ${p.tiers.first.minQuantity - 1}: ${formatLe(p.price)} each'),
+                        for (final tier in p.tiers)
+                          Text(
+                              '${tier.minQuantity}+: ${formatLe(tier.unitPrice)} each'),
+                      ]),
                 ),
               ],
               if (p.variants.isNotEmpty) ...[
                 const SizedBox(height: 14),
-                const Text('Choose an option', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                const Text('Choose an option',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 6),
                 Wrap(spacing: 8, runSpacing: 6, children: [
                   for (final option in p.variants)
                     ChoiceChip(
-                      label: Text('${option.name}${option.price != null ? ' · ${formatLe(option.price)}' : ''}${option.stock < 1 ? ' (sold out)' : ''}'),
+                      label: Text(
+                          '${option.name}${option.price != null ? ' · ${formatLe(option.price)}' : ''}${option.stock < 1 ? ' (sold out)' : ''}'),
                       selected: _option?.id == option.id,
                       onSelected: option.stock < 1
                           ? null
@@ -254,25 +393,45 @@ class _ProductBodyState extends State<_ProductBody> {
               ],
               const SizedBox(height: 16),
               Row(children: [
-                const Text('Quantity', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                const Text('Quantity',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                 const Spacer(),
                 IconButton.filledTonal(
-                  onPressed: _qty > p.minOrderQuantity ? () => setState(() => _qty--) : null,
+                  onPressed: _qty > p.minOrderQuantity
+                      ? () => setState(() => _qty--)
+                      : null,
                   icon: const Icon(Icons.remove),
                 ),
-                SizedBox(width: 48, child: Text('$_qty', textAlign: TextAlign.center, style: const TextStyle(fontSize: 20))),
-                IconButton.filledTonal(onPressed: _qty < maxQty ? () => setState(() => _qty++) : null, icon: const Icon(Icons.add)),
+                SizedBox(
+                    width: 48,
+                    child: Text('$_qty',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 20))),
+                IconButton.filledTonal(
+                    onPressed:
+                        _qty < maxQty ? () => setState(() => _qty++) : null,
+                    icon: const Icon(Icons.add)),
               ]),
               if (p.minOrderQuantity > 1)
-                Text('Minimum order: ${p.minOrderQuantity}', style: const TextStyle(color: WiBuyColors.muted)),
+                Text('Minimum order: ${p.minOrderQuantity}',
+                    style: const TextStyle(color: WiBuyColors.muted)),
               Padding(
                 padding: const EdgeInsets.only(top: 6),
-                child: Text('Total: ${formatLe(_lineTotal)}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                child: Text('Total: ${formatLe(_lineTotal)}',
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w700)),
               ),
               const SizedBox(height: 12),
               Row(children: [
-                TextButton.icon(onPressed: _toggleSave, icon: const Icon(Icons.favorite_border), label: const Text('Save')),
-                TextButton.icon(onPressed: _share, icon: const Icon(Icons.share), label: const Text('Share on WhatsApp')),
+                TextButton.icon(
+                    onPressed: _toggleSave,
+                    icon: const Icon(Icons.favorite_border),
+                    label: const Text('Save')),
+                TextButton.icon(
+                    onPressed: _share,
+                    icon: const Icon(Icons.share),
+                    label: const Text('Share on WhatsApp')),
               ]),
               Builder(builder: (context) {
                 final session = SessionScope.of(context);
@@ -283,35 +442,45 @@ class _ProductBodyState extends State<_ProductBody> {
                     label: Text(inCompare ? 'In compare (remove)' : 'Compare'),
                     onPressed: () {
                       if (!session.toggleCompare(p.slug)) {
-                        showMessage(context, 'You can compare up to ${Session.compareMax} products. Remove one first.');
+                        showMessage(context,
+                            'You can compare up to ${Session.compareMax} products. Remove one first.');
                       }
                     },
                   ),
                   if (session.compareList.length > 1)
                     TextButton(
-                      onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CompareScreen())),
-                      child: Text('See ${session.compareList.length} side by side'),
+                      onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                              builder: (_) => const CompareScreen())),
+                      child: Text(
+                          'See ${session.compareList.length} side by side'),
                     ),
                 ]);
               }),
               if (p.priceCutCampaignId != null)
                 OutlinedButton.icon(
-                  onPressed: () => startPriceCut(context, p.priceCutCampaignId!),
+                  onPressed: () =>
+                      startPriceCut(context, p.priceCutCampaignId!),
                   icon: const Text('✂️'),
                   label: const Text('Help me cut the price'),
                 ),
               if (p.samplePrice != null)
                 TextButton.icon(
                   onPressed: () async {
-                    if (!await ensureLoggedIn(context) || !context.mounted) return;
-                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => CheckoutScreen(productSlug: p.slug, quantity: 1, sample: true)));
+                    if (!await ensureLoggedIn(context) || !context.mounted)
+                      return;
+                    Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => CheckoutScreen(
+                            productSlug: p.slug, quantity: 1, sample: true)));
                   },
                   icon: const Text('📦'),
-                  label: Text('Order a sample (${formatLe(p.samplePrice)}), credited on your bulk order'),
+                  label: Text(
+                      'Order a sample (${formatLe(p.samplePrice)}), credited on your bulk order'),
                 ),
               if (p.trialCampaignId != null)
                 TextButton.icon(
-                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TrialsScreen())),
+                  onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const TrialsScreen())),
                   icon: const Text('🧪'),
                   label: const Text('Free trial: apply to test it'),
                 ),
@@ -322,41 +491,87 @@ class _ProductBodyState extends State<_ProductBody> {
                   leading: p.seller!.logoUrl == null
                       ? const CircleAvatar(child: Icon(Icons.storefront))
                       : Photo(p.seller!.logoUrl, size: 44, radius: 22),
-                  title: Text('${p.seller!.shopName}${p.seller!.isVerified ? '  ✓ Verified' : ''}'),
-                  subtitle: Text('${p.seller!.location} · reliability ${p.seller!.reliabilityScore == null ? 'new shop' : '${p.seller!.reliabilityScore}/100'}'),
+                  title: Text(
+                      '${p.seller!.shopName}${p.seller!.isVerified ? '  ✓ Verified' : ''}'),
+                  subtitle: Text(
+                      '${p.seller!.location} · reliability ${p.seller!.reliabilityScore == null ? 'new shop' : '${p.seller!.reliabilityScore}/100'}'),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ShopScreen(slug: p.seller!.slug))),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => ShopScreen(slug: p.seller!.slug))),
                 ),
                 TextButton.icon(
-                  onPressed: () => openChatWith(context, userId: p.seller!.userId, title: p.seller!.shopName),
+                  onPressed: () => openChatWith(context,
+                      userId: p.seller!.userId, title: p.seller!.shopName),
                   icon: const Icon(Icons.chat_bubble_outline),
                   label: const Text('Chat about this product'),
                 ),
               ],
+              if (p.seller?.holidayNotice != null)
+                Card(
+                  color: Colors.amber.shade50,
+                  child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text('🏖 ${p.seller!.holidayNotice}',
+                          style: const TextStyle(fontWeight: FontWeight.w700))),
+                ),
               if ((p.description ?? '').isNotEmpty) ...[
                 const Divider(height: 28),
-                const Text('Description', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                const Text('Description',
+                    style:
+                        TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 6),
-                Text(p.description!, style: const TextStyle(fontSize: 15, height: 1.4)),
+                Text(p.description!,
+                    style: const TextStyle(fontSize: 15, height: 1.4)),
               ],
+              const Divider(height: 28),
+              Row(children: [
+                const Expanded(
+                    child: Text('Questions and answers',
+                        style: TextStyle(
+                            fontSize: 17, fontWeight: FontWeight.w700))),
+                TextButton.icon(
+                    onPressed: _ask,
+                    icon: const Icon(Icons.help_outline),
+                    label: const Text('Ask')),
+              ]),
+              if (widget.data.questions.isEmpty)
+                const Text(
+                    'No questions yet. Ask the shop anything about this product.',
+                    style: TextStyle(color: WiBuyColors.muted)),
+              for (final q in widget.data.questions)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Q: ${q['question']}',
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: Text('A: ${q['answer']}'),
+                ),
               if (widget.data.reviews.isNotEmpty) ...[
                 const Divider(height: 28),
-                const Text('Reviews', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                const Text('Reviews',
+                    style:
+                        TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                 for (final review in widget.data.reviews)
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: Text('${'★' * review.rating}${'☆' * (5 - review.rating)}  ${review.buyer ?? ''}${review.isFreeTrial ? '  · Free trial' : ''}'),
-                    subtitle: review.comment == null ? null : Text(review.comment!),
+                    title: Text(
+                        '${'★' * review.rating}${'☆' * (5 - review.rating)}  ${review.buyer ?? ''}${review.isFreeTrial ? '  · Free trial' : ''}'),
+                    subtitle:
+                        review.comment == null ? null : Text(review.comment!),
                   ),
               ],
               if (widget.data.alsoBought.isNotEmpty) ...[
                 const Divider(height: 28),
-                const Text('People who bought this also bought', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                const Text('People who bought this also bought',
+                    style:
+                        TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 8),
               ],
             ]),
           ),
-          if (widget.data.alsoBought.isNotEmpty) ...[ProductGrid(widget.data.alsoBought), const SizedBox(height: 16)],
+          if (widget.data.alsoBought.isNotEmpty) ...[
+            ProductGrid(widget.data.alsoBought),
+            const SizedBox(height: 16)
+          ],
         ]),
       ),
       SafeArea(
@@ -365,10 +580,15 @@ class _ProductBodyState extends State<_ProductBody> {
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
           child: Row(children: [
             Expanded(
-              child: OutlinedButton(onPressed: _busy || outOfStock ? null : _addToCart, child: Text(tr(context, 'Add to cart'))),
+              child: OutlinedButton(
+                  onPressed: _busy || outOfStock ? null : _addToCart,
+                  child: Text(tr(context, 'Add to cart'))),
             ),
             const SizedBox(width: 10),
-            Expanded(child: FilledButton(onPressed: _busy || outOfStock ? null : _buyNow, child: Text(tr(context, 'Buy now')))),
+            Expanded(
+                child: FilledButton(
+                    onPressed: _busy || outOfStock ? null : _buyNow,
+                    child: Text(tr(context, 'Buy now')))),
           ]),
         ),
       ),
@@ -378,7 +598,10 @@ class _ProductBodyState extends State<_ProductBody> {
   /// Unit price × quantity, from the exact strings (cents as integers, no doubles).
   String get _lineTotal {
     final parts = _unitPrice.split('.');
-    final cents = int.parse(parts[0]) * 100 + int.parse((parts.length > 1 ? parts[1] : '0').padRight(2, '0').substring(0, 2));
+    final cents = int.parse(parts[0]) * 100 +
+        int.parse((parts.length > 1 ? parts[1] : '0')
+            .padRight(2, '0')
+            .substring(0, 2));
     final total = cents * _qty;
 
     return '${total ~/ 100}.${(total % 100).toString().padLeft(2, '0')}';

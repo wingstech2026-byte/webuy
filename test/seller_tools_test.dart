@@ -39,6 +39,8 @@ void main() {
     await tester.pump();
     await tester.enterText(find.widgetWithText(TextField, 'Option').last, 'Medium');
     await tester.enterText(find.widgetWithText(TextField, 'Stock').last, '6');
+    await tester.ensureVisible(find.text('Save product'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Save product'));
     await tester.pumpAndSettle();
 

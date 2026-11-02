@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../api/geo_models.dart';
 import '../api/models.dart';
@@ -8,13 +9,25 @@ import '../theme.dart';
 import '../util/money.dart';
 import '../widgets/common.dart';
 import 'addresses_screen.dart';
+import 'details_screen.dart';
+import 'instant_screen.dart';
 import 'payment_screen.dart';
 import 'rewards_screen.dart';
 
 /// Checkout for the whole cart, or "Buy now" for one product. One order is made per seller;
 /// the backend computes every fee and total (shown from /checkout/quote).
 class CheckoutScreen extends StatefulWidget {
-  const CheckoutScreen({super.key, this.productSlug, this.quantity, this.couponId, this.sample = false, this.variantId});
+  const CheckoutScreen(
+      {super.key,
+      this.productSlug,
+      this.quantity,
+      this.couponId,
+      this.sample = false,
+      this.variantId,
+      this.teamToken});
+
+  /// Checking out for an office team order (delivered to the office with colleagues' meals).
+  final String? teamToken;
 
   /// The option chosen on the product page (size, colour...).
   final int? variantId;
@@ -45,7 +58,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   List<SavedAddress> _addresses = const [];
   int? _addressId;
 
-  SavedAddress? get _address => _addresses.where((a) => a.id == _addressId).firstOrNull;
+  SavedAddress? get _address =>
+      _addresses.where((a) => a.id == _addressId).firstOrNull;
   String _operator = 'ORANGE';
 
   /// seller id => 'delivery' | 'pickup'
@@ -56,6 +70,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   Quote? _quote;
   Object? _error;
+
+  /// Instant food: where the buyer is (when the address has no map pin) and an optional delivery time.
+  LatLng? _here;
+  DateTime? _deliverAt;
   late int? _couponId = widget.couponId;
   bool _couponTouched = false;
   List<Coupon> _coupons = [];
@@ -113,12 +131,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       _error = null;
     });
     try {
-      final json = await SessionScope.read(context).api.post('/checkout/quote', {
+      final json =
+          await SessionScope.read(context).api.post('/checkout/quote', {
         ..._lineParams,
-        if (_addressId != null) 'address_id': _addressId else 'district': _district,
+        if (_addressId != null)
+          'address_id': _addressId
+        else
+          'district': _district,
         'methods': _methods.map((k, v) => MapEntry('$k', v)),
         if (_couponId != null) 'coupon_id': _couponId,
         if (_stationId != null) 'station_id': _stationId,
+        if (widget.teamToken != null) 'team': widget.teamToken,
+        if (_addressId == null && _here != null) ...{'lat': _here!.latitude, 'lng': _here!.longitude},
       }) as Map<String, dynamic>;
       final quote = Quote.fromJson(json);
       setState(() {
@@ -141,11 +165,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
-  bool get _needsAddress => _methods.values.contains('delivery') || _methods.values.contains('station_door');
+  bool get _needsAddress =>
+      _methods.values.contains('delivery') ||
+      _methods.values.contains('station_door');
 
   Future<void> _pay() async {
     final quote = _quote;
     if (quote == null) return;
+    // Every buyer gives their name and where they live before buying (older accounts do it once).
+    if (SessionScope.read(context).user?.hasDetails == false) {
+      showMessage(
+          context, 'Please add your full name and where you live first.');
+      await Navigator.of(context)
+          .push(MaterialPageRoute(builder: (_) => const MyDetailsScreen()));
+      return;
+    }
     if (quote.groups.any((g) => !_methods.containsKey(g.sellerId))) {
       showMessage(context, 'Choose delivery or pickup for every shop.');
       return;
@@ -170,15 +204,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         'note': _note.text.trim(),
         'methods': _methods.map((k, v) => MapEntry('$k', v)),
         if (_stationId != null) 'station_id': _stationId,
+        if (widget.teamToken != null) 'team': widget.teamToken,
+        if (_addressId == null && _here != null) ...{'latitude': _here!.latitude, 'longitude': _here!.longitude},
+        if (_deliverAt != null) 'deliver_at': _deliverAt!.toUtc().toIso8601String(),
         'operator': _operator,
         'payer_phone': _payerPhone.text.trim(),
-        if (_couponId != null && quote.couponError == null) 'coupon_id': _couponId,
+        if (_couponId != null && quote.couponError == null)
+          'coupon_id': _couponId,
         'payment_plan': _inParts && quote.canPayInParts ? 'milestones' : 'full',
       }) as Map<String, dynamic>;
-      final checkout = CheckoutInfo.fromJson(json['data'] as Map<String, dynamic>);
+      final checkout =
+          CheckoutInfo.fromJson(json['data'] as Map<String, dynamic>);
       if (!mounted) return;
       SessionScope.read(context).refreshCartCount();
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => PaymentScreen(initial: checkout)));
+      Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => PaymentScreen(initial: checkout)));
     } on Object catch (e) {
       if (mounted) showMessage(context, e);
     } finally {
@@ -186,24 +226,91 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
+  /// Office order banner, or for instant food: "about N min", the exact spot and an optional time.
+  List<Widget> _instantPanel(Quote quote) {
+    final team = quote.team;
+    if (team != null) {
+      return [
+        Card(
+          color: WiBuyColors.green.withValues(alpha: 0.08),
+          child: ListTile(
+            leading: const Icon(Icons.groups),
+            title: Text('Office order: ${team['title']}'),
+            subtitle: Text('To ${team['place']}. ${team['organiser_pays_delivery'] == true ? 'The organiser pays the delivery: you pay only for your food.' : 'You pay the delivery once for everyone.'}'),
+          ),
+        ),
+      ];
+    }
+    final instant = quote.groups.where((g) => g.isInstant && _methods[g.sellerId] == 'delivery').toList();
+    if (instant.isEmpty) return const [];
+    final hasPin = _address?.hasPin == true || _here != null;
+    String hm(DateTime d) => '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+
+    return [
+      Card(
+        color: Colors.amber.shade50,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('⚡ Instant food delivery', style: TextStyle(fontWeight: FontWeight.w800)),
+            for (final g in instant)
+              if (g.etaMinutes != null) Text('${g.seller.shopName}: about ${g.etaMinutes} min'),
+            if (!hasPin)
+              TextButton.icon(
+                onPressed: () async {
+                  final here = await InstantScreen.locate(context);
+                  if (here != null && mounted) {
+                    setState(() => _here = here);
+                    _requote();
+                  }
+                },
+                icon: const Icon(Icons.my_location),
+                label: const Text('The rider needs your exact spot: use my location'),
+              ),
+            TextButton.icon(
+              onPressed: () async {
+                final picked = await showTimePicker(context: context, initialTime: const TimeOfDay(hour: 13, minute: 0));
+                setState(() => _deliverAt = picked == null ? null : deliveryTime(picked));
+              },
+              icon: const Icon(Icons.schedule),
+              label: Text(_deliverAt == null ? 'As soon as it is cooked (tap to choose a time)' : 'Deliver at ${hm(_deliverAt!)} (tap to change)'),
+            ),
+            const Text('The shop starts cooking only after you have paid.', style: TextStyle(color: WiBuyColors.muted, fontSize: 12)),
+          ]),
+        ),
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final meta = SessionScope.of(context).meta;
     final districts = meta?.districts ?? [_district];
-    final operators = meta?.operators ?? const [MapEntry('ORANGE', 'Orange Money'), MapEntry('AFRIMONEY', 'Afrimoney')];
+    final operators = meta?.operators ??
+        const [
+          MapEntry('ORANGE', 'Orange Money'),
+          MapEntry('AFRIMONEY', 'Afrimoney')
+        ];
     final quote = _quote;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Checkout')),
       body: quote == null
-          ? (_error != null ? ErrorRetry(message: _error.toString(), onRetry: _requote) : const Center(child: CircularProgressIndicator()))
+          ? (_error != null
+              ? ErrorRetry(message: _error.toString(), onRetry: _requote)
+              : const Center(child: CircularProgressIndicator()))
           : ListView(padding: const EdgeInsets.all(14), children: [
+              ..._instantPanel(quote),
               _section('1. Where are you?'),
               if (_addresses.isNotEmpty)
                 Wrap(spacing: 8, runSpacing: 4, children: [
                   for (final a in _addresses)
                     ChoiceChip(
-                      avatar: Icon(a.hasPin ? Icons.location_on : Icons.location_on_outlined, size: 18),
+                      avatar: Icon(
+                          a.hasPin
+                              ? Icons.location_on
+                              : Icons.location_on_outlined,
+                          size: 18),
                       label: Text(a.label),
                       selected: _addressId == a.id,
                       onSelected: (_) {
@@ -226,48 +333,69 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               if (_address != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child: Text('${_address!.recipientName} · ${_address!.oneLine}', style: const TextStyle(color: WiBuyColors.muted)),
+                  child: Text(
+                      '${_address!.recipientName} · ${_address!.oneLine}',
+                      style: const TextStyle(color: WiBuyColors.muted)),
                 )
               else ...[
-              DropdownButtonFormField<String>(
-                initialValue: districts.contains(_district) ? _district : null,
-                decoration: const InputDecoration(labelText: 'District'),
-                items: [for (final d in districts) DropdownMenuItem(value: d, child: Text(d))],
-                onChanged: (value) {
-                  if (value == null) return;
-                  setState(() => _district = value);
-                  _requote();
-                },
-              ),
-              TextButton.icon(
-                icon: const Icon(Icons.add_location_alt_outlined),
-                label: const Text('Save an address for next time'),
-                onPressed: () async {
-                  final added = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (_) => const AddressFormScreen()));
-                  if (added == true) _loadAddresses();
-                },
-              ),
+                DropdownButtonFormField<String>(
+                  initialValue:
+                      districts.contains(_district) ? _district : null,
+                  decoration: const InputDecoration(labelText: 'District'),
+                  items: [
+                    for (final d in districts)
+                      DropdownMenuItem(value: d, child: Text(d))
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() => _district = value);
+                    _requote();
+                  },
+                ),
+                TextButton.icon(
+                  icon: const Icon(Icons.add_location_alt_outlined),
+                  label: const Text('Save an address for next time'),
+                  onPressed: () async {
+                    final added = await Navigator.of(context).push<bool>(
+                        MaterialPageRoute(
+                            builder: (_) => const AddressFormScreen()));
+                    if (added == true) _loadAddresses();
+                  },
+                ),
               ],
               _section('2. Delivery or pickup'),
               for (final group in quote.groups) _groupCard(group),
               if (_addressId == null) ...[
-              _section('3. Who receives it?'),
-              TextField(controller: _name, decoration: const InputDecoration(labelText: 'Name')),
-              const SizedBox(height: 10),
-              TextField(controller: _phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Phone')),
+                _section('3. Who receives it?'),
+                TextField(
+                    controller: _name,
+                    decoration: const InputDecoration(labelText: 'Name')),
+                const SizedBox(height: 10),
+                TextField(
+                    controller: _phone,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(labelText: 'Phone')),
               ],
               if (_needsAddress && _addressId == null) ...[
                 const SizedBox(height: 10),
                 TextField(
                   controller: _addressText,
-                  decoration: const InputDecoration(labelText: 'Address or landmark', hintText: 'Near the mosque, Wilkinson Road'),
+                  decoration: const InputDecoration(
+                      labelText: 'Address or landmark',
+                      hintText: 'Near the mosque, Wilkinson Road'),
                 ),
               ],
               const SizedBox(height: 10),
-              TextField(controller: _note, decoration: const InputDecoration(labelText: 'Note for the seller (optional)')),
+              TextField(
+                  controller: _note,
+                  decoration: const InputDecoration(
+                      labelText: 'Note for the seller (optional)')),
               _section('4. Pay with mobile money'),
               SegmentedButton<String>(
-                segments: [for (final o in operators) ButtonSegment(value: o.key, label: Text(o.value))],
+                segments: [
+                  for (final o in operators)
+                    ButtonSegment(value: o.key, label: Text(o.value))
+                ],
                 selected: {_operator},
                 onSelectionChanged: (s) => setState(() => _operator = s.first),
               ),
@@ -275,7 +403,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               TextField(
                 controller: _payerPhone,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'Mobile money number'),
+                decoration:
+                    const InputDecoration(labelText: 'Mobile money number'),
               ),
               if (_coupons.isNotEmpty) ...[
                 _section('5. Coupon'),
@@ -291,21 +420,27 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       _requote();
                     },
                   ),
-                if (quote.couponError != null) Text(quote.couponError!, style: const TextStyle(color: Colors.red)),
+                if (quote.couponError != null)
+                  Text(quote.couponError!,
+                      style: const TextStyle(color: Colors.red)),
               ],
               if (quote.canPayInParts)
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   value: _inParts,
                   onChanged: (v) => setState(() => _inParts = v),
-                  title: Text('Pay in parts: ${quote.depositPercent}% now (${formatLe(quote.depositAmount)})'),
-                  subtitle: const Text('The balance before delivery. You can book a WiBuy inspection first.'),
+                  title: Text(
+                      'Pay in parts: ${quote.depositPercent}% now (${formatLe(quote.depositAmount)})'),
+                  subtitle: const Text(
+                      'The balance before delivery. You can book a WiBuy inspection first.'),
                 ),
               const SizedBox(height: 18),
               _row('Items', quote.itemsTotal),
               _row('Delivery', quote.deliveryTotal),
-              if (quote.passSavings != '0.00') _row('WiBuy Pass free delivery', '-${quote.passSavings}'),
-              if (quote.couponDiscount != '0.00') _row('Coupon', '-${quote.couponDiscount}'),
+              if (quote.passSavings != '0.00')
+                _row('WiBuy Pass free delivery', '-${quote.passSavings}'),
+              if (quote.couponDiscount != '0.00')
+                _row('Coupon', '-${quote.couponDiscount}'),
               const Divider(),
               _row('Total to pay', quote.amountDue, bold: true),
               const SizedBox(height: 14),
@@ -313,7 +448,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 onPressed: _paying || _quoting ? null : _pay,
                 child: Text(_paying
                     ? 'Sending payment request…'
-                    : (quote.amountDue == '0.00' ? 'Place free order' : 'Pay ${formatLe(_inParts && quote.canPayInParts ? quote.depositAmount : quote.amountDue)}')),
+                    : (quote.amountDue == '0.00'
+                        ? 'Place free order'
+                        : 'Pay ${formatLe(_inParts && quote.canPayInParts ? quote.depositAmount : quote.amountDue)}')),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -331,15 +468,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         child: Card(
           child: Padding(
             padding: const EdgeInsets.all(12),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(group.seller.shopName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(group.seller.shopName,
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w800)),
               for (final item in group.items)
-                Text('${item.quantity} × ${item.title}', maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text('${item.quantity} × ${item.title}',
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
               const SizedBox(height: 8),
               Wrap(spacing: 8, children: [
                 if (group.canDeliver)
                   ChoiceChip(
-                    label: Text('Delivery${group.districtFee != null ? ' (${formatLe(group.districtFee)})' : ''}'),
+                    label: Text(
+                        'Delivery${group.districtFee != null ? ' (${formatLe(group.districtFee)})' : ''}'),
                     selected: _methods[group.sellerId] == 'delivery',
                     onSelected: (_) => _choose(group, 'delivery'),
                   ),
@@ -351,25 +493,32 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ),
                 if (group.canStation) ...[
                   ChoiceChip(
-                    label: Text('📦 WiBuy station (${formatLe(group.stationFee)})'),
+                    label: Text(
+                        '📦 WiBuy station (${formatLe(group.stationFee)})'),
                     selected: _methods[group.sellerId] == 'station',
                     onSelected: (_) => _choose(group, 'station'),
                   ),
                   ChoiceChip(
-                    label: Text('🛵 WiBuy to my door (${formatLe(group.stationDoorFee)})'),
+                    label: Text(
+                        '🛵 WiBuy to my door (${formatLe(group.stationDoorFee)})'),
                     selected: _methods[group.sellerId] == 'station_door',
                     onSelected: (_) => _choose(group, 'station_door'),
                   ),
                 ],
               ]),
-              if (_methods[group.sellerId] == 'station' && (_quote?.stations.isNotEmpty ?? false))
+              if (_methods[group.sellerId] == 'station' &&
+                  (_quote?.stations.isNotEmpty ?? false))
                 DropdownButtonFormField<int>(
                   isExpanded: true,
                   initialValue: _stationId,
-                  decoration: const InputDecoration(labelText: 'Collect at which WiBuy station?'),
+                  decoration: const InputDecoration(
+                      labelText: 'Collect at which WiBuy station?'),
                   items: [
                     for (final s in _quote!.stations)
-                      DropdownMenuItem(value: (s['id'] as num).toInt(), child: Text('${s['name']} · ${s['district']}', overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(
+                          value: (s['id'] as num).toInt(),
+                          child: Text('${s['name']} · ${s['district']}',
+                              overflow: TextOverflow.ellipsis)),
                   ],
                   onChanged: (id) {
                     setState(() => _stationId = id);
@@ -377,21 +526,35 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   },
                 ),
               if (_methods[group.sellerId] == 'station')
-                const Text('We text you a code when it arrives. Show it at the station.', style: TextStyle(color: WiBuyColors.muted)),
+                const Text(
+                    'We text you a code when it arrives. Show it at the station.',
+                    style: TextStyle(color: WiBuyColors.muted)),
               if (_methods[group.sellerId] == 'station_door')
-                const Text('A WiBuy rider brings it from the station. Give the rider the code from our SMS.', style: TextStyle(color: WiBuyColors.muted)),
+                const Text(
+                    'A WiBuy rider brings it from the station. Give the rider the code from our SMS.',
+                    style: TextStyle(color: WiBuyColors.muted)),
               if (!group.canDeliver && group.deliveryReason != null)
-                Text(group.deliveryReason!, style: const TextStyle(color: Colors.red))
+                Text(group.deliveryReason!,
+                    style: const TextStyle(color: Colors.red))
               else if (!group.canDeliver && !group.canPickup)
-                const Text('This shop cannot deliver to your district.', style: TextStyle(color: Colors.red)),
-              if (_methods[group.sellerId] == 'delivery' && group.distanceKm != null)
-                Text('About ${group.distanceKm} km from the shop${group.deliveryWindow != null ? ' · usually ${group.deliveryWindow}' : ''} (estimate)',
+                const Text('This shop cannot deliver to your district.',
+                    style: TextStyle(color: Colors.red)),
+              if (_methods[group.sellerId] == 'delivery' &&
+                  group.distanceKm != null)
+                Text(
+                    'About ${group.distanceKm} km from the shop${group.deliveryWindow != null ? ' · usually ${group.deliveryWindow}' : ''} (estimate)',
                     style: const TextStyle(color: WiBuyColors.muted)),
-              if (_methods[group.sellerId] == 'pickup' && group.seller.pickupAddress != null)
-                Text('Pick up at: ${group.seller.pickupAddress}', style: const TextStyle(color: WiBuyColors.muted)),
-              if (group.freeDelivery) const Text('Free delivery with WiBuy Pass ⭐', style: TextStyle(color: WiBuyColors.green, fontWeight: FontWeight.w700)),
+              if (_methods[group.sellerId] == 'pickup' &&
+                  group.seller.pickupAddress != null)
+                Text('Pick up at: ${group.seller.pickupAddress}',
+                    style: const TextStyle(color: WiBuyColors.muted)),
+              if (group.freeDelivery)
+                const Text('Free delivery with WiBuy Pass ⭐',
+                    style: TextStyle(
+                        color: WiBuyColors.green, fontWeight: FontWeight.w700)),
               const SizedBox(height: 4),
-              Text('Shop total: ${formatLe(group.total)}', style: const TextStyle(fontWeight: FontWeight.w700)),
+              Text('Shop total: ${formatLe(group.total)}',
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
             ]),
           ),
         ),
@@ -404,15 +567,22 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   Widget _section(String text) => Padding(
         padding: const EdgeInsets.fromLTRB(2, 18, 2, 8),
-        child: Text(text, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+        child: Text(text,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
       );
 
   Widget _row(String label, String amount, {bool bold = false}) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 2),
         child: Row(children: [
-          Text(label, style: TextStyle(fontSize: bold ? 18 : 15, fontWeight: bold ? FontWeight.w800 : FontWeight.w400)),
+          Text(label,
+              style: TextStyle(
+                  fontSize: bold ? 18 : 15,
+                  fontWeight: bold ? FontWeight.w800 : FontWeight.w400)),
           const Spacer(),
-          Text(formatLe(amount), style: TextStyle(fontSize: bold ? 20 : 15, fontWeight: bold ? FontWeight.w900 : FontWeight.w600)),
+          Text(formatLe(amount),
+              style: TextStyle(
+                  fontSize: bold ? 20 : 15,
+                  fontWeight: bold ? FontWeight.w900 : FontWeight.w600)),
         ]),
       );
 }
