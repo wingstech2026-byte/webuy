@@ -6,6 +6,7 @@ use App\Enums\OrderStatus;
 use App\Exceptions\MarketplaceException;
 use App\Models\DeliveryJob;
 use App\Models\Order;
+use App\Models\Product;
 use App\Models\Seller;
 use App\Models\TeamOrder;
 use App\Models\User;
@@ -52,6 +53,18 @@ class InstantService
             ])
             ->sortBy([['is_open', 'desc'], ['distance_km', 'asc']])
             ->values();
+    }
+
+    /**
+     * Best-rated dishes from these shops (at least 3 ratings, 4 stars or more), best first.
+     *
+     * @param  Collection<int, array{seller: Seller}>  $shops
+     */
+    public function topRated(Collection $shops, int $limit = 8): Collection
+    {
+        return Product::listed()->whereIn('seller_id', $shops->pluck('seller.id'))
+            ->where('rating_count', '>=', 3)->where('rating_avg', '>=', 4)
+            ->with('images', 'seller', 'tiers')->orderByDesc('rating_avg')->orderByDesc('rating_count')->limit($limit)->get();
     }
 
     /**

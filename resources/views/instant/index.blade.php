@@ -16,6 +16,15 @@
         <p class="card mb-4 bg-amber-50 p-4 text-amber-900">Share your location to see which food shops deliver to you and how long it takes. Below are all food shops.</p>
     @endunless
 
+    @if ($topRated->isNotEmpty())
+        <section class="mb-5">
+            <h2 class="mb-2 text-lg font-extrabold">⭐ Top rated {{ $point ? 'near you' : 'food' }}</h2>
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+                @foreach ($topRated as $product) <x-product-card :product="$product" /> @endforeach
+            </div>
+        </section>
+    @endif
+
     @forelse ($shops as $row)
         @php($seller = $row['seller'])
         <section class="card mb-5 p-4">
@@ -25,6 +34,7 @@
                     <p class="text-sm text-stone-600">
                         @if ($row['is_open']) <span class="badge bg-brand-100 text-brand-800">Open</span> @else <span class="badge bg-stone-200 text-stone-700">Closed now</span> @endif
                         @if ($seller->hoursLabel()) &middot; {{ $seller->hoursLabel() }} @endif
+                        @if ($seller->rating_count > 0) &middot; ★ {{ number_format((float) $seller->rating_avg, 1) }} ({{ $seller->rating_count }}) @endif
                         @if ($row['eta_minutes']) &middot; ⏱ about {{ $row['eta_minutes'] }} min &middot; {{ $row['distance_km'] }} km @endif
                     </p>
                     @unless ($row['is_open']) <p class="text-sm text-stone-500">You can still order for a time when it is open (choose the time at checkout).</p> @endunless

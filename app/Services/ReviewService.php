@@ -64,6 +64,10 @@ class ReviewService
                     'buyer_id' => $buyer->id,
                     'rating' => (int) $input['rating'],
                     'comment' => ($input['comment'] ?? null) ?: null,
+                    // Food: how it tasted, how big the portion was, how it was packed.
+                    'taste' => isset($input['taste']) && $input['taste'] !== '' ? (int) $input['taste'] : null,
+                    'portion' => isset($input['portion']) && $input['portion'] !== '' ? (int) $input['portion'] : null,
+                    'packaging' => isset($input['packaging']) && $input['packaging'] !== '' ? (int) $input['packaging'] : null,
                 ]);
 
                 foreach (array_slice(array_values($input['photos'] ?? []), 0, 4) as $position => $photo) {
@@ -84,6 +88,39 @@ class ReviewService
         });
 
         $this->farms->mission($buyer, 'review');
+    }
+
+    /**
+     * The shop answers a review in public (once; it can change the answer). The buyer is told.
+     *
+     * @throws MarketplaceException
+     */
+    public function reply(Review|SellerReview $review, User $by, string $reply): void
+    {
+        if ($by->seller?->id !== $review->seller_id) {
+            throw new MarketplaceException('This review is not about your shop.');
+        }
+
+        ProductQuestionService::refuseContactDetails($reply);
+        $review->forceFill(['seller_reply' => trim($reply), 'replied_at' => now()])->save();
+        $review->loadMissing('buyer');
+        $shop = Seller::find($review->seller_id);
+        $link = $review instanceof Review ? route('products.show', $review->product_id ? Product::find($review->product_id) : null).'#reviews' : route('shops.show', $shop);
+        app(NotificationService::class)->notify($review->buyer, "💬 {$shop->shop_name} answered your review", mb_substr(trim($reply), 0, 160), $link);
+    }
+
+    /** Average taste, portion and packaging of a dish (null when no food scores yet). */
+    public static function foodScores(int $productId): ?array
+    {
+        $row = Review::where('product_id', $productId)->whereNotNull('taste')
+            ->selectRaw('count(*) as n, avg(taste) as taste, avg(portion) as portion, avg(packaging) as packaging')->first();
+
+        return $row && $row->n > 0 ? [
+            'count' => (int) $row->n,
+            'taste' => round((float) $row->taste, 1),
+            'portion' => $row->portion !== null ? round((float) $row->portion, 1) : null,
+            'packaging' => $row->packaging !== null ? round((float) $row->packaging, 1) : null,
+        ] : null;
     }
 
     /** Average rating and number of ratings, kept on the seller and product for fast lists and sorting. */

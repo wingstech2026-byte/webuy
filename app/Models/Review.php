@@ -13,7 +13,7 @@ class Review extends Model
 
     protected function casts(): array
     {
-        return ['is_free_trial' => 'boolean'];
+        return ['is_free_trial' => 'boolean', 'replied_at' => 'datetime'];
     }
 
     /** Photos with the review (free trial reviews must have some). */

@@ -53,6 +53,7 @@
                             <a href="{{ route('account.details') }}" class="block px-4 py-3 hover:bg-brand-50">👤 My details</a>
                             <a href="{{ route('wishlist.index') }}" class="block px-4 py-3 hover:bg-brand-50">{{ __('Wishlist') }}</a>
                             <a href="{{ route('following.index') }}" class="block px-4 py-3 hover:bg-brand-50">❤ {{ __('Following') }}</a>
+                            <a href="{{ route('rewards.mine') }}" class="block px-4 py-3 hover:bg-brand-50">🎟 {{ __('My rewards') }}</a>
                             <a href="{{ route('invite.show') }}" class="block px-4 py-3 hover:bg-brand-50">🎁 {{ __('Invite friends') }}</a>
                             <a href="{{ route('compare.index') }}" class="block px-4 py-3 hover:bg-brand-50">{{ __('Compare & recently viewed') }}</a>
                             <a href="{{ route('group-buys.index') }}" class="block px-4 py-3 hover:bg-brand-50">👥 Buy together</a>

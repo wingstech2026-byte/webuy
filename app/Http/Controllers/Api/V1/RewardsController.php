@@ -13,6 +13,7 @@ use App\Models\PriceCut;
 use App\Services\CheckInService;
 use App\Services\CouponService;
 use App\Services\FarmService;
+use App\Services\MyRewardsService;
 use App\Services\PointsService;
 use App\Services\RewardService;
 use App\Services\ShareService;
@@ -78,6 +79,24 @@ class RewardsController extends Controller
         return response()->json([
             'points' => $request->user()->points_balance,
             'history' => PointTransaction::where('user_id', $request->user()->id)->latest('id')->limit(50)->get(['points', 'reason', 'created_at']),
+        ]);
+    }
+
+    /** "My rewards": points, coupons by state, what ends soon and the points history. */
+    public function mine(Request $request, MyRewardsService $rewards): JsonResponse
+    {
+        $r = $rewards->summary($request->user());
+
+        return response()->json([
+            'points' => $r['points'],
+            'points_per_coupon' => $r['points_per_coupon'],
+            'coupon_from_points' => $r['coupon_from_points'],
+            'can_exchange' => $r['can_exchange'],
+            'saved' => $r['saved'],
+            'expiring_soon' => CouponResource::collection($r['expiring_soon'])->resolve($request),
+            'usable' => CouponResource::collection($r['usable'])->resolve($request),
+            'locked' => CouponResource::collection($r['locked'])->resolve($request),
+            'history' => $r['history'],
         ]);
     }
 

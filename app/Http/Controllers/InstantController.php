@@ -22,12 +22,13 @@ class InstantController extends Controller
         try {
             $shops = $hasPoint ? $instant->nearby((float) $data['lat'], (float) $data['lng']) : self::allFoodShops();
         } catch (MarketplaceException $e) {
-            return view('instant.index', ['shops' => collect(), 'products' => collect(), 'point' => null, 'error' => $e->getMessage(), 'closeOptions' => TeamOrderService::CLOSE_OPTIONS]);
+            return view('instant.index', ['shops' => collect(), 'products' => collect(), 'topRated' => collect(), 'point' => null, 'error' => $e->getMessage(), 'closeOptions' => TeamOrderService::CLOSE_OPTIONS]);
         }
 
         return view('instant.index', [
             'shops' => $shops,
             'products' => self::productsOf($shops),
+            'topRated' => $instant->topRated($shops),
             'point' => $hasPoint ? ['lat' => (float) $data['lat'], 'lng' => (float) $data['lng']] : null,
             'error' => null,
             'closeOptions' => TeamOrderService::CLOSE_OPTIONS,

@@ -83,6 +83,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('/rewards/check-in', [V1\RewardsController::class, 'checkIn'])->name('rewards.check-in');
         Route::get('/coupons', [V1\RewardsController::class, 'coupons'])->name('coupons.index');
         Route::get('/points', [V1\RewardsController::class, 'points'])->name('points.index');
+        Route::get('/my-rewards', [V1\RewardsController::class, 'mine'])->name('rewards.mine');
         Route::post('/points/exchange', [V1\RewardsController::class, 'exchange'])->middleware('throttle:10,1')->name('points.exchange');
         Route::post('/shares', [V1\RewardsController::class, 'share'])->middleware('throttle:30,1')->name('shares.store');
 

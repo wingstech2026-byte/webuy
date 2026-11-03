@@ -10,6 +10,11 @@ class SellerReview extends Model
 {
     protected $guarded = [];
 
+    protected function casts(): array
+    {
+        return ['replied_at' => 'datetime'];
+    }
+
     public function seller(): BelongsTo
     {
         return $this->belongsTo(Seller::class);

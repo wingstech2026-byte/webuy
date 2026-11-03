@@ -21,6 +21,7 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\InstantController;
 use App\Http\Controllers\InviteController;
 use App\Http\Controllers\LiveController;
+use App\Http\Controllers\MyRewardsController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PhotoSearchController;
 use App\Http\Controllers\PriceCutPageController;
@@ -155,6 +156,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/shop/{seller:slug}/follow', [FollowController::class, 'toggle'])->middleware('throttle:30,1')->name('shops.follow');
     Route::get('/following', [FollowController::class, 'index'])->name('following.index');
     Route::get('/invite', [InviteController::class, 'show'])->name('invite.show');
+    Route::get('/my-rewards', [MyRewardsController::class, 'show'])->name('rewards.mine');
+    Route::post('/my-rewards/exchange', [MyRewardsController::class, 'exchange'])->middleware('throttle:10,1')->name('rewards.exchange');
     Route::post('/bundles/{bundle}/cart', [BundleController::class, 'addToCart'])->middleware('throttle:cart')->name('bundles.cart');
     Route::post('/team', [TeamOrderController::class, 'store'])->middleware('throttle:10,1')->name('team.store');
     Route::post('/team/{teamOrder:token}/close', [TeamOrderController::class, 'close'])->name('team.close');
@@ -256,6 +259,7 @@ Route::middleware(['auth', 'seller'])->prefix('seller')->name('seller.')->group(
     Route::put('/shop/delivery', [Seller\ShopController::class, 'updateDelivery'])->middleware('shop-owner')->name('shop.delivery');
 
     Route::get('/reviews', Seller\ReviewsController::class)->name('reviews');
+    Route::post('/reviews/{kind}/{id}/reply', [Seller\ReviewsController::class, 'reply'])->whereIn('kind', ['shop', 'product'])->whereNumber('id')->middleware('throttle:30,1')->name('reviews.reply');
     Route::get('/questions', [Seller\QuestionController::class, 'index'])->name('questions.index');
     Route::post('/questions/{question}/answer', [Seller\QuestionController::class, 'answer'])->middleware('throttle:30,1')->name('questions.answer');
     Route::post('/questions/{question}/hide', [Seller\QuestionController::class, 'hide'])->name('questions.hide');

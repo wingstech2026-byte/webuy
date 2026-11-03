@@ -249,6 +249,19 @@
                                     <label class="choice min-h-12 px-3"><input type="radio" name="items[{{ $item->id }}][rating]" value="{{ $i }}" class="size-5 accent-brand-700">{{ str_repeat('★', $i) }}</label>
                                 @endfor
                             </div>
+                            @if ($order->seller->is_instant)
+                                {{-- Food: taste, portion, packaging --}}
+                                <div class="mt-2 grid gap-1 text-sm sm:grid-cols-3">
+                                    @foreach (['taste' => '😋 Taste', 'portion' => '🍽 Portion', 'packaging' => '📦 Packaging'] as $field => $label)
+                                        <label>{{ $label }}
+                                            <select name="items[{{ $item->id }}][{{ $field }}]" class="input py-1">
+                                                <option value="">—</option>
+                                                @for ($i = 5; $i >= 1; $i--) <option value="{{ $i }}">{{ str_repeat('★', $i) }}</option> @endfor
+                                            </select>
+                                        </label>
+                                    @endforeach
+                                </div>
+                            @endif
                             <textarea name="items[{{ $item->id }}][comment]" rows="2" maxlength="1000" class="input mt-2" placeholder="What did you think? (optional)"></textarea>
                             <label for="photos-{{ $item->id }}" class="mt-2 block text-sm font-semibold text-stone-600">📷 Photos of what you got (optional, up to 4)</label>
                             <input id="photos-{{ $item->id }}" type="file" name="items[{{ $item->id }}][photos][]" accept="image/*" multiple class="mt-1 block w-full text-sm">

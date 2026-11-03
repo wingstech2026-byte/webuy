@@ -30,7 +30,7 @@ class InstantController extends Controller
             'eta_minutes' => $row['eta_minutes'],
             'is_open' => $row['is_open'],
             'products' => ProductResource::collection($products->get($row['seller']->id, collect()))->resolve($request),
-        ])->values(), 'close_options' => TeamOrderService::CLOSE_OPTIONS]);
+        ])->values(), 'top_rated' => ProductResource::collection($instant->topRated($shops))->resolve($request), 'close_options' => TeamOrderService::CLOSE_OPTIONS]);
     }
 
     public function startTeam(Request $request, TeamOrderService $teams): JsonResponse

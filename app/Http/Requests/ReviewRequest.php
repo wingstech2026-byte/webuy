@@ -19,6 +19,10 @@ class ReviewRequest extends FormRequest
             'items' => ['nullable', 'array'],
             'items.*.rating' => ['nullable', 'integer', 'between:1,5'],
             'items.*.comment' => ['nullable', 'string', 'max:1000'],
+            // Food: taste, portion and packaging (optional stars).
+            'items.*.taste' => ['nullable', 'integer', 'between:1,5'],
+            'items.*.portion' => ['nullable', 'integer', 'between:1,5'],
+            'items.*.packaging' => ['nullable', 'integer', 'between:1,5'],
             'items.*.photos' => ['nullable', 'array', 'max:4'],
             'items.*.photos.*' => ['image', 'max:8192'],
         ];

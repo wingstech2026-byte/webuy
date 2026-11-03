@@ -279,6 +279,14 @@
     {{-- Reviews --}}
     <section class="mt-8" aria-labelledby="reviews">
         <h2 id="reviews" class="mb-3 text-xl font-extrabold">{{ __('Reviews') }}</h2>
+        @if ($foodScores)
+            <p class="card mb-3 flex flex-wrap gap-4 p-3 text-sm font-semibold">
+                <span>😋 Taste {{ $foodScores['taste'] }}/5</span>
+                @if ($foodScores['portion']) <span>🍽 Portion {{ $foodScores['portion'] }}/5</span> @endif
+                @if ($foodScores['packaging']) <span>📦 Packaging {{ $foodScores['packaging'] }}/5</span> @endif
+                <span class="font-normal text-stone-500">from {{ $foodScores['count'] }} review(s)</span>
+            </p>
+        @endif
         @forelse ($reviews as $review)
             <div class="card mb-2 p-4">
                 <div class="flex items-center justify-between gap-2">
@@ -288,6 +296,7 @@
                     <x-stars :rating="$review->rating" />
                 </div>
                 @if ($review->comment) <p class="mt-1 text-stone-700">{{ $review->comment }}</p> @endif
+                @if ($review->taste) <p class="text-xs text-stone-500">Taste {{ $review->taste }}/5 @if ($review->portion) &middot; Portion {{ $review->portion }}/5 @endif @if ($review->packaging) &middot; Packaging {{ $review->packaging }}/5 @endif</p> @endif
                 @if ($review->images->isNotEmpty())
                     <div class="mt-2 flex gap-2">
                         @foreach ($review->images->where('status', 'ready') as $photo)
@@ -296,6 +305,9 @@
                     </div>
                 @endif
                 <p class="mt-1 text-xs text-stone-400">{{ $review->created_at->format('j M Y') }}</p>
+                @if ($review->seller_reply)
+                    <p class="mt-2 rounded-lg bg-stone-50 p-2 text-sm"><strong>Reply from the shop:</strong> {{ $review->seller_reply }}</p>
+                @endif
             </div>
         @empty
             <p class="text-stone-500">No reviews yet. Buyers can review after their order is completed.</p>

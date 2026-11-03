@@ -33,7 +33,6 @@
             </div>
         </div>
 
-        @endauth
         @if ($cut->isActive())
             <p class="card p-4">Share this link with friends on WhatsApp so they can help cut the price for you.</p>
         @endif

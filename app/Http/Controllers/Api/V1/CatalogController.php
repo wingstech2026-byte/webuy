@@ -12,6 +12,7 @@ use App\Models\Product;
 use App\Models\Seller;
 use App\Services\FollowService;
 use App\Services\RecommendationService;
+use App\Services\ReviewService;
 use App\Services\SearchService;
 use App\Services\ShopOfferService;
 use App\Services\SponsoredProductService;
@@ -96,6 +97,7 @@ class CatalogController extends Controller
             'data' => (new ProductResource($product))->detailed(),
             'also_bought' => ProductResource::collection($recommendations->alsoBought($product, 6)),
             'reviews' => ReviewResource::collection($product->reviews()->with('buyer', 'images')->limit(10)->get()),
+            'food_scores' => ReviewService::foodScores($product->id),
             // Extras for a dish, the shop's offers on it and bundles with it.
             'addons' => $product->addons->map(fn ($a) => ['id' => $a->id, 'name' => $a->name, 'price' => (string) $a->price])->values(),
             'offers' => ($shop = app(ShopOfferService::class)->forProduct($product))['offers']->map(fn ($o) => ['label' => $o->label])->values(),

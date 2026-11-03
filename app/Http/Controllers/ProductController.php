@@ -7,6 +7,7 @@ use App\Models\GroupBuyCampaign;
 use App\Models\Product;
 use App\Models\WishlistItem;
 use App\Services\RecommendationService;
+use App\Services\ReviewService;
 use App\Services\ShopOfferService;
 use App\Support\BrowsingHistory;
 use App\Support\Money;
@@ -60,6 +61,7 @@ class ProductController extends Controller
             'openGroups' => $groupOffer ? $groupOffer->groups()->where('status', GroupBuy::OPEN)->where('expires_at', '>', now())->with('leader')->orderBy('expires_at')->limit(5)->get() : collect(),
             'recent' => $history->recent($product, 8),
             'reviews' => $product->reviews()->with('buyer', 'images')->limit(10)->get(),
+            'foodScores' => ReviewService::foodScores($product->id),
             'alsoBought' => $this->recommendations->alsoBought($product, 4),
             // The shop's own offers that apply to this product, and bundles with it.
             'shopOffers' => app(ShopOfferService::class)->forProduct($product),

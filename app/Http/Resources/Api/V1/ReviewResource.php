@@ -18,7 +18,11 @@ class ReviewResource extends JsonResource
             'rating' => $this->rating,
             'comment' => $this->comment,
             'buyer' => $this->buyer?->first_name,
-            'is_free_trial' => (bool) $this->is_free_trial, // shown as "Free trial" so other buyers know
+            'is_free_trial' => (bool) $this->is_free_trial,
+            'taste' => $this->taste,
+            'portion' => $this->portion,
+            'packaging' => $this->packaging,
+            'seller_reply' => $this->seller_reply, // shown as "Free trial" so other buyers know
             'photos' => $this->images->where('status', 'ready')->map(fn ($image) => $image->thumb_url)->values(),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
