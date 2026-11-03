@@ -86,6 +86,13 @@ class _InstantScreenState extends State<InstantScreen> {
                 ),
               if (shops.isEmpty)
                 Padding(padding: const EdgeInsets.all(20), child: Text(here == null ? 'No food shops yet.' : 'No food shop delivers to this spot yet.')),
+              if (((json['top_rated'] as List?) ?? const []).isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(2, 12, 2, 6),
+                  child: Text(here == null ? '⭐ Top rated food' : '⭐ Top rated near you', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                ),
+                ProductGrid((json['top_rated'] as List).whereType<Map<String, dynamic>>().map(Product.fromJson).toList()),
+              ],
               for (final row in shops) ...[
                 const SizedBox(height: 12),
                 _ShopHeader(row: row, onTeam: () => _startTeam(Seller.fromJson(row['seller'] as Map<String, dynamic>), closeOptions)),

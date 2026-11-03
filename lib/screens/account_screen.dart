@@ -13,6 +13,7 @@ import 'chat_screen.dart';
 import 'compare_screen.dart';
 import 'details_screen.dart';
 import 'following_screen.dart';
+import 'my_rewards_screen.dart';
 import 'global_screen.dart';
 import 'group_buy_screen.dart';
 import 'login_screen.dart';
@@ -83,6 +84,14 @@ class AccountScreen extends StatelessWidget {
                 subtitle: const Text('News from shops you follow'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FollowingScreen())),
+              ),
+            if (user != null)
+              ListTile(
+                leading: const Icon(Icons.local_offer_outlined),
+                title: Text(tr(context, 'My rewards')),
+                subtitle: const Text('Points, coupons and what ends soon'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MyRewardsScreen())),
               ),
             if (user != null)
               ListTile(

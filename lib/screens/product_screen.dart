@@ -30,7 +30,11 @@ class ProductDetail {
             .toList(),
         addons = ((j['addons'] as List?) ?? const []).whereType<Map<String, dynamic>>().toList(),
         offers = ((j['offers'] as List?) ?? const []).whereType<Map<String, dynamic>>().map((o) => '${o['label']}').toList(),
-        bundles = ((j['bundles'] as List?) ?? const []).whereType<Map<String, dynamic>>().toList();
+        bundles = ((j['bundles'] as List?) ?? const []).whereType<Map<String, dynamic>>().toList(),
+        foodScores = j['food_scores'] as Map<String, dynamic>?;
+
+  /// Food: average taste, portion and packaging ({count, taste, portion, packaging}).
+  final Map<String, dynamic>? foodScores;
 
   /// Extras for a dish: {id, name, price}.
   final List<Map<String, dynamic>> addons;
@@ -604,13 +608,32 @@ class _ProductBodyState extends State<_ProductBody> {
                 const Text('Reviews',
                     style:
                         TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                if (widget.data.foodScores != null)
+                  Text(
+                      [
+                        '😋 Taste ${widget.data.foodScores!['taste']}/5',
+                        if (widget.data.foodScores!['portion'] != null) '🍽 Portion ${widget.data.foodScores!['portion']}/5',
+                        if (widget.data.foodScores!['packaging'] != null) '📦 Packaging ${widget.data.foodScores!['packaging']}/5',
+                      ].join('  ·  '),
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
                 for (final review in widget.data.reviews)
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     title: Text(
                         '${'★' * review.rating}${'☆' * (5 - review.rating)}  ${review.buyer ?? ''}${review.isFreeTrial ? '  · Free trial' : ''}'),
-                    subtitle:
-                        review.comment == null ? null : Text(review.comment!),
+                    subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      if (review.comment != null) Text(review.comment!),
+                      if (review.taste != null)
+                        Text('Taste ${review.taste}/5${review.portion != null ? ' · Portion ${review.portion}/5' : ''}${review.packaging != null ? ' · Packaging ${review.packaging}/5' : ''}',
+                            style: const TextStyle(fontSize: 12)),
+                      if (review.sellerReply != null)
+                        Container(
+                          margin: const EdgeInsets.only(top: 4),
+                          padding: const EdgeInsets.all(8),
+                          color: Colors.grey.shade100,
+                          child: Text('Reply from the shop: ${review.sellerReply}'),
+                        ),
+                    ]),
                   ),
               ],
               if (widget.data.alsoBought.isNotEmpty) ...[

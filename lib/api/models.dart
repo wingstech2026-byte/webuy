@@ -344,13 +344,29 @@ class Review {
       {required this.rating,
       this.comment,
       this.buyer,
-      this.isFreeTrial = false});
+      this.isFreeTrial = false,
+      this.taste,
+      this.portion,
+      this.packaging,
+      this.sellerReply});
+
+  /// Food: taste, portion and packaging stars (null when not given).
+  final int? taste;
+  final int? portion;
+  final int? packaging;
+
+  /// The shop's public answer.
+  final String? sellerReply;
 
   factory Review.fromJson(Map<String, dynamic> j) => Review(
         rating: (j['rating'] as num).toInt(),
         comment: j['comment'] as String?,
         buyer: j['buyer'] as String?,
         isFreeTrial: j['is_free_trial'] == true,
+        taste: (j['taste'] as num?)?.toInt(),
+        portion: (j['portion'] as num?)?.toInt(),
+        packaging: (j['packaging'] as num?)?.toInt(),
+        sellerReply: j['seller_reply'] as String?,
       );
 
   /// Shown as "Free trial": the buyer got it free or almost free to test it.
