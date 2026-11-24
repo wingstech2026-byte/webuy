@@ -21,6 +21,9 @@
                 @if ($seller->is_verified) <span class="badge bg-brand-100 text-brand-800">✓ Verified seller</span> @endif
             </h1>
             <p class="text-stone-600">{{ $seller->location }} &middot; {{ $seller->followers()->count() }} follower(s)</p>
+            @foreach ($sellerBadges as $badge)
+                <span class="badge bg-brand-100 text-brand-800">{{ $badge }}</span>
+            @endforeach
             <x-stars :rating="$seller->rating_avg" :count="$seller->rating_count" />
             @auth
                 @if (auth()->id() !== $seller->user_id)

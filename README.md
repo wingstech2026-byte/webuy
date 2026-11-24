@@ -469,3 +469,30 @@ config/             wibuy.php, payments.php, sms.php, chat.php
 - Buyer–seller chat is off by default (`CHAT_DIRECT_ENABLED`).
 - Row locking (`lockForUpdate`) does nothing on SQLite, so the stock protection only works under real concurrency on PostgreSQL (or MySQL). The test suite runs on SQLite and checks the logic, not parallel requests.
 - On checkout, switching a seller between delivery and pickup reloads the totals with a few lines of JavaScript. Without JavaScript the total shown can be out of date, but the server always recalculates it, so the payment prompt is for the correct amount.
+
+## Laravel Cloud launch
+
+Use the WiBuy backend repository in the wings-tech organization. Set up a
+staging environment first with PHP 8.3 and an attached PostgreSQL database.
+
+- Build assets with `npm ci && npm run build` during the Cloud build.
+- Set the deploy command to `php artisan migrate --force --no-interaction`.
+- Set `APP_ENV=production`, `APP_DEBUG=false`, `SESSION_SECURE_COOKIE=true`,
+  and set `APP_URL` to the final HTTPS origin. Keep `APP_KEY` stable across
+  deployments. Configure pawaPay and SMS credentials as Cloud secrets.
+- Use database-backed sessions, cache, and queues. Run
+  `php artisan queue:work database --tries=3 --timeout=60` as a background
+  process and enable the scheduler on one cluster.
+- Attach two [object storage buckets](https://laravel.com/cloud/docs/resources/object-storage).
+  Use a public bucket with the disk name `public` for product media and
+  a separate private default bucket for seller identity documents.
+- On a fresh database, configure `ADMIN_PHONE` and `ADMIN_NAME`, then run
+  `php artisan db:seed --class=ProductionAdminSeeder --force --no-interaction`
+  to create the owner account without demo data. Create catalog categories in
+  the admin panel before onboarding sellers.
+- Verify owner login, photo uploads, restricted identity-document access,
+  queued processing, scheduled alerts, and payment callbacks in staging.
+  Build Flutter with `API_BASE_URL` set to the HTTPS backend plus `/api/v1`.
+
+See the [Laravel Cloud deployment guide](https://laravel.com/cloud/docs/deploy-guides/laravel)
+for environment configuration and build settings.

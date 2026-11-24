@@ -20,6 +20,7 @@ class ShopController extends Controller
         $sort = in_array($request->query('sort'), array_keys(SearchService::SORTS), true) ? $request->query('sort') : 'newest';
 
         return view('shops.show', [
+            'sellerBadges' => $seller->earnedBadges(),
             'seller' => $seller->load('logo'),
             'products' => $search->search(['seller' => $seller->id, 'sort' => $sort, 'q' => $request->query('q')], 12),
             'reviews' => $seller->reviews()->with('buyer')->limit(10)->get(),

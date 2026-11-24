@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class Product extends Model
@@ -145,6 +146,16 @@ class Product extends Model
         static::created(function (Product $product) {
             if ($product->status === ProductStatus::Active) {
                 app(FollowService::class)->productPublished($product);
+            }
+        });
+
+        static::saved(function (Product $product): void {
+            if ($product->wasRecentlyCreated || $product->wasChanged('price')) {
+                DB::table('product_price_history')->insert([
+                    'product_id' => $product->id,
+                    'price' => $product->price,
+                    'recorded_at' => now(),
+                ]);
             }
         });
 

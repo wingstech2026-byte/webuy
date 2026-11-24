@@ -11,6 +11,8 @@ use App\Http\Resources\Api\V1\SellerResource;
 use App\Models\Product;
 use App\Models\Seller;
 use App\Services\FollowService;
+use App\Services\ProductPriceTracking;
+use App\Services\ProductStockAlerts;
 use App\Services\RecommendationService;
 use App\Services\ReviewService;
 use App\Services\SearchService;
@@ -83,7 +85,7 @@ class CatalogController extends Controller
         return ProductResource::collection($this->search->search($filters, 20));
     }
 
-    public function product(Request $request, Product $product, RecommendationService $recommendations): JsonResponse
+    public function product(Request $request, Product $product, RecommendationService $recommendations, ProductPriceTracking $prices, ProductStockAlerts $stockAlerts): JsonResponse
     {
         abort_unless($product->isListed(), 404);
 
@@ -95,6 +97,11 @@ class CatalogController extends Controller
 
         return response()->json([
             'data' => (new ProductResource($product))->detailed(),
+            'stock_alert' => $stockAlerts->subscribed($product, $user),
+            'can_set_stock_alert' => ! $stockAlerts->hasStock($product),
+            'price_history' => $prices->history($product),
+            'price_alert' => $prices->target($product, $user),
+            'seller_badges' => $product->seller->earnedBadges(),
             'also_bought' => ProductResource::collection($recommendations->alsoBought($product, 6)),
             'reviews' => ReviewResource::collection($product->reviews()->with('buyer', 'images')->limit(10)->get()),
             'food_scores' => ReviewService::foodScores($product->id),
@@ -116,9 +123,28 @@ class CatalogController extends Controller
 
         return response()->json([
             'data' => new SellerResource($seller->load('logo')),
+            'seller_badges' => $seller->earnedBadges(),
             'followers' => $seller->followers()->count(),
             'is_following' => app(FollowService::class)->follows($request->user('sanctum'), $seller),
             'products' => ProductResource::collection($this->search->search(['seller' => $seller->id], 40)),
         ]);
+    }
+
+    public function stockAlert(Request $request, Product $product, ProductStockAlerts $stockAlerts): JsonResponse
+    {
+        abort_unless($product->isListed(), 404);
+
+        $request->validate(['subscribed' => ['required', 'boolean']]);
+        $subscribed = $request->boolean('subscribed');
+        $stockAlerts->update($product, $request->user(), $subscribed);
+
+        return response()->json(['subscribed' => $subscribed]);
+    }
+
+    public function priceAlert(Request $request, Product $product, ProductPriceTracking $prices): JsonResponse
+    {
+        abort_unless($product->isListed(), 404);
+
+        return response()->json(['target' => $prices->saveAlert($request, $product)]);
     }
 }

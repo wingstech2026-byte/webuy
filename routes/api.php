@@ -41,6 +41,8 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
     Route::post('/auth/verify', [V1\AuthController::class, 'verify'])->middleware('throttle:otp-verify')->name('auth.verify');
 
     Route::middleware('auth:sanctum')->group(function () {
+        Route::post('/products/{product:slug}/price-alert', [V1\CatalogController::class, 'priceAlert'])->middleware('throttle:30,1')->name('products.price-alert');
+        Route::post('/products/{product:slug}/stock-alert', [V1\CatalogController::class, 'stockAlert'])->middleware('throttle:30,1')->name('products.stock-alert');
         Route::get('/me', [V1\AuthController::class, 'me'])->name('me');
         Route::post('/me', [V1\AuthController::class, 'updateMe'])->middleware('throttle:20,1')->name('me.update');
         Route::post('/auth/logout', [V1\AuthController::class, 'logout'])->name('auth.logout');
@@ -174,12 +176,19 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::post('/products', [V1\SellerController::class, 'saveProduct'])->middleware('throttle:30,1')->name('products.store');
             Route::post('/products/{product:slug}', [V1\SellerController::class, 'saveProduct'])->middleware('throttle:30,1')->name('products.update');
             Route::post('/products/{product:slug}/promote', [V1\SellerController::class, 'promote'])->middleware('throttle:10,1')->middleware('shop-owner')->name('products.promote');
-            Route::get('/reports', [V1\SellerController::class, 'reports'])->name('reports');
+            Route::get('/reports', [V1\SellerController::class, 'reports'])->middleware('shop-owner')->name('reports');
+            Route::middleware('shop-owner')->group(function () {
+                Route::get('/settings', [V1\ShopSettingsController::class, 'show'])->name('settings');
+                Route::put('/settings/holiday', [V1\ShopSettingsController::class, 'holiday'])->middleware('throttle:10,1')->name('settings.holiday');
+                Route::post('/settings/staff', [V1\ShopSettingsController::class, 'addStaff'])->middleware('throttle:10,1')->name('settings.staff.store');
+                Route::delete('/settings/staff/{user}', [V1\ShopSettingsController::class, 'removeStaff'])->name('settings.staff.destroy');
+            });
             Route::put('/instant', [V1\InstantController::class, 'shopSettings'])->middleware('shop-owner')->name('instant');
             Route::get('/earnings', [V1\SellerController::class, 'earnings'])->middleware('shop-owner')->name('earnings');
             Route::post('/payouts', [V1\SellerController::class, 'payout'])->middleware('throttle:10,1')->middleware('shop-owner')->name('payouts');
             Route::get('/rfqs', [V1\SellerController::class, 'rfqs'])->name('rfqs');
             Route::get('/questions', [V1\QuestionController::class, 'forShop'])->name('questions');
+            Route::delete('/questions/{question}', [V1\QuestionController::class, 'hide'])->name('questions.hide');
             Route::post('/questions/{question}/answer', [V1\QuestionController::class, 'answer'])->middleware('throttle:30,1')->name('questions.answer');
             Route::post('/rfqs/{rfq}/quote', [V1\SellerController::class, 'quote'])->middleware('throttle:30,1')->name('rfqs.quote');
             Route::get('/quotes', [V1\SellerController::class, 'quotes'])->name('quotes');

@@ -6,6 +6,7 @@ use App\Enums\Operator;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Seller\DeliveryAreasRequest;
 use App\Http\Requests\SellerApplicationRequest;
+use App\Http\Requests\ShopHolidayRequest;
 use App\Services\SellerService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -60,12 +61,9 @@ class ShopController extends Controller
     }
 
     /** Holiday mode: closed until a date (empty: open). Products still show, but cannot be ordered. */
-    public function holiday(Request $request): RedirectResponse
+    public function holiday(ShopHolidayRequest $request): RedirectResponse
     {
-        $data = $request->validate([
-            'holiday_until' => ['nullable', 'date', 'after_or_equal:today', 'before:+3 months'],
-            'holiday_message' => ['nullable', 'string', 'max:200'],
-        ], ['holiday_until.*' => 'Choose a date from today, within 3 months.']);
+        $data = $request->validated();
 
         $request->user()->seller->forceFill(['holiday_until' => $data['holiday_until'] ?? null, 'holiday_message' => $data['holiday_message'] ?? null])->save();
 

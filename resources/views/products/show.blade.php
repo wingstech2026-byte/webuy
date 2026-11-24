@@ -124,6 +124,7 @@
                 @if (! $isBusiness && $product->tiers->contains('business_only', true))
                     <p class="mt-1 text-sm"><a class="font-semibold text-brand-700" href="{{ route('business.create') }}">Lower prices for verified businesses &rarr;</a></p>
                 @endif
+                @include('products.price-tracking')
                 @if ($product->sample_price)
                     <p class="mt-1 text-sm">Try a sample first: one unit for {{ money($product->sample_price) }} (in the app), credited back on your bulk order.</p>
                 @endif

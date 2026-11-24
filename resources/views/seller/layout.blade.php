@@ -22,7 +22,7 @@
         $shop = auth()->user()->seller;
         // Helpers: no money, no shop settings.
         if (! auth()->user()->isShopOwner()) {
-            unset($tabs['seller.earnings'], $tabs['seller.shop*']);
+            unset($tabs['seller.earnings'], $tabs['seller.shop*'], $tabs['seller.reports']);
         }
     @endphp
 

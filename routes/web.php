@@ -188,6 +188,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/orders/{order}/return', [ReturnController::class, 'store'])->middleware('throttle:10,1')->name('returns.store');
     Route::get('/problems/{dispute}', [DisputeController::class, 'show'])->name('disputes.show');
 
+    Route::post('/p/{product:slug}/price-alert', [ProductController::class, 'priceAlert'])->middleware('throttle:30,1')->name('products.price-alert');
+    Route::post('/p/{product:slug}/stock-alert', [ProductController::class, 'stockAlert'])->middleware('throttle:30,1')->name('products.stock-alert');
     Route::get('/wishlist', [WishlistController::class, 'index'])->name('wishlist.index');
     Route::post('/wishlist/{product:slug}', [WishlistController::class, 'toggle'])->name('wishlist.toggle');
 
@@ -246,7 +248,7 @@ Route::middleware(['auth', 'seller'])->prefix('seller')->name('seller.')->group(
     Route::post('/orders/{order}/ship', [Seller\OrderController::class, 'ship'])->name('orders.ship');
     Route::post('/orders/{order}/deliver', [Seller\OrderController::class, 'deliver'])->name('orders.deliver');
 
-    Route::get('/reports', Seller\ReportController::class)->name('reports');
+    Route::get('/reports', Seller\ReportController::class)->middleware('shop-owner')->name('reports');
     Route::get('/earnings', [Seller\EarningsController::class, 'index'])->middleware('shop-owner')->name('earnings');
     Route::post('/payouts', [Seller\EarningsController::class, 'requestPayout'])->middleware('throttle:10,1')->middleware('shop-owner')->name('payouts.store');
 

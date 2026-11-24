@@ -6,18 +6,21 @@ use App\Models\GroupBuy;
 use App\Models\GroupBuyCampaign;
 use App\Models\Product;
 use App\Models\WishlistItem;
+use App\Services\ProductPriceTracking;
+use App\Services\ProductStockAlerts;
 use App\Services\RecommendationService;
 use App\Services\ReviewService;
 use App\Services\ShopOfferService;
 use App\Support\BrowsingHistory;
 use App\Support\Money;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
     public function __construct(private RecommendationService $recommendations) {}
 
-    public function show(Request $request, Product $product)
+    public function show(Request $request, Product $product, ProductPriceTracking $prices, ProductStockAlerts $stockAlerts)
     {
         $user = $request->user();
 
@@ -55,6 +58,11 @@ class ProductController extends Controller
 
         return view('products.show', [
             'product' => $product,
+            'stockAlert' => $stockAlerts->subscribed($product, $user),
+            'canSetStockAlert' => $product->isListed() && ! $stockAlerts->hasStock($product),
+            'priceHistory' => $prices->history($product),
+            'priceTarget' => $prices->target($product, $user),
+            'sellerBadges' => $product->seller->earnedBadges(),
             'comparing' => $history->comparing($product),
             // A live group price for this product: start a group or join one that is filling up.
             'groupOffer' => $groupOffer = GroupBuyCampaign::open()->where('product_id', $product->id)->with('collectionPoint')->latest('id')->first(),
@@ -73,6 +81,26 @@ class ProductController extends Controller
             'whatsappUrl' => 'https://wa.me/?text='.rawurlencode($shareText),
             'shareUrl' => $url,
         ]);
+    }
+
+    public function stockAlert(Request $request, Product $product, ProductStockAlerts $stockAlerts): RedirectResponse
+    {
+        abort_unless($product->isListed(), 404);
+
+        $request->validate(['subscribed' => ['required', 'boolean']]);
+        $subscribed = $request->boolean('subscribed');
+        $stockAlerts->update($product, $request->user(), $subscribed);
+
+        return back()->with('status', $subscribed ? 'Stock alert saved.' : 'Stock alert removed.');
+    }
+
+    public function priceAlert(Request $request, Product $product, ProductPriceTracking $prices): RedirectResponse
+    {
+        abort_unless($product->isListed(), 404);
+
+        $target = $prices->saveAlert($request, $product);
+
+        return back()->with('status', $target === null ? 'Price alert removed.' : 'Price alert saved.');
     }
 
     /**

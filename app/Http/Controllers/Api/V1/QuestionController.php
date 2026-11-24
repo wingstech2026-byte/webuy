@@ -8,6 +8,7 @@ use App\Models\ProductQuestion;
 use App\Services\ProductQuestionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 
 /** Product questions in the app: buyers ask; shops see and answer theirs. */
 class QuestionController extends Controller
@@ -40,5 +41,13 @@ class QuestionController extends Controller
         $questions->answer($question, $request->user(), $data['answer']);
 
         return response()->json(['data' => ['id' => $question->id, 'answer' => $question->answer]]);
+    }
+
+    public function hide(Request $request, ProductQuestion $question): Response
+    {
+        abort_unless($question->product->seller_id === $request->user()->seller?->id, 404);
+        $question->forceFill(['is_hidden' => true])->save();
+
+        return response()->noContent();
     }
 }

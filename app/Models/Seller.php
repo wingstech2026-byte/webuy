@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\Operator;
+use App\Enums\OrderStatus;
 use App\Enums\SellerStatus;
 use App\Services\SettingsService;
 use Carbon\CarbonInterface;
@@ -202,5 +203,19 @@ class Seller extends Model
     public function getLocationAttribute(): string
     {
         return trim(($this->area ? $this->area.', ' : '').$this->district);
+    }
+
+    /** @return list<string> */
+    public function earnedBadges(): array
+    {
+        $recentShipments = $this->orders()->where('shipped_at', '>=', now()->subDays(90))
+            ->whereNotNull('accepted_at')->get(['accepted_at', 'shipped_at']);
+        $fastShipments = $recentShipments->filter(fn ($order) => $order->shipped_at->lte($order->accepted_at->copy()->addDay()))->count();
+
+        return array_values(array_filter([
+            $recentShipments->count() >= 10 && $fastShipments / $recentShipments->count() >= 0.9 ? 'Fast shipper' : null,
+            $this->rating_count >= 10 && $this->rating_avg >= 4.5 ? 'Top rated' : null,
+            $this->orders()->where('status', OrderStatus::Completed)->limit(100)->pluck('id')->count() === 100 ? '100+ orders' : null,
+        ]));
     }
 }

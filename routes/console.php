@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\ProductStockAlerts;
 use Illuminate\Support\Facades\Schedule;
 
 // Run `php artisan schedule:run` every minute from cron (see README).
@@ -19,3 +20,6 @@ Schedule::command('wibuy:rewards-tick')->everyFiveMinutes()->withoutOverlapping(
 Schedule::command('wibuy:rotate-deals')->dailyAt('20:00');                                // tomorrow's automatic lightning deals
 Schedule::command('wibuy:daily-rewards')->dailyAt('09:00');
 Schedule::command('wibuy:reliability')->dailyAt('03:00');                                 // shop delivery reliability scores                               // WiBuy Pass reminders, trial review deadlines
+Schedule::command('wibuy:price-alerts')->everyFiveMinutes()->withoutOverlapping();
+
+Schedule::call(fn () => app(ProductStockAlerts::class)->sendAvailable())->name('wibuy:stock-alerts')->everyFiveMinutes()->withoutOverlapping();
