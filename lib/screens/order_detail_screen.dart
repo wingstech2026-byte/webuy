@@ -66,7 +66,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     _run(() => SessionScope.read(context).api.get('/orders/${widget.orderId}'));
   }
 
-  Future<void> _run(Future<dynamic> Function() request) async {
+  Future<void> _run(Future<dynamic> Function() request, {String? successMessage}) async {
     setState(() {
       _busy = true;
       _error = null;
@@ -76,6 +76,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       setState(
           () => _order = Order.fromJson(json['data'] as Map<String, dynamic>));
       _followLive();
+      if (mounted && successMessage != null) showMessage(context, successMessage);
     } on Object catch (e) {
       if (_order == null) {
         setState(() => _error = e);
@@ -208,27 +209,55 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
+  void _showReceipt(Order order) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Receipt ${order.number}'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (order.seller != null) Text(order.seller!.shopName),
+              Text(order.statusLabel),
+              const Divider(),
+              for (final item in order.items)
+                Text('${item.quantity} × ${item.displayTitle} — ${formatLe(item.lineTotal)}'),
+              const Divider(),
+              Text('Items: ${formatLe(order.subtotal)}'),
+              Text('Delivery: ${formatLe(order.deliveryFee)}'),
+              if ((double.tryParse(order.shopDiscount) ?? 0) > 0)
+                Text('Shop savings: −${formatLe(order.shopDiscount)}'),
+              if ((double.tryParse(order.discount) ?? 0) > 0)
+                Text('Discount: −${formatLe(order.discount)}'),
+              if ((double.tryParse(order.riderTip) ?? 0) > 0)
+                Text('Rider tip: ${formatLe(order.riderTip)}'),
+              const SizedBox(height: 8),
+              Text('Paid: ${formatLe(order.amountPaid)}',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
   Future<void> _review(Order order) async {
-    final result = await showModalBottomSheet<(int, String, List<PickedPhoto>)>(
+    final items = order.items.where((i) => i.reviewed != true).toList();
+    final result = await showModalBottomSheet<ReviewInput>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => const _ReviewSheet(),
+      builder: (_) => ReviewSheet(items: items, isFood: order.isInstant),
     );
     if (result == null || !mounted) return;
-    final (rating, comment, photos) = result;
-    // Photos go with the first product (the order's "what I got" pictures).
-    await _run(() => SessionScope.read(context)
-            .api
-            .postMultipart('/orders/${widget.orderId}/review', {
-          'seller_rating': '$rating',
-          if (comment.isNotEmpty) 'seller_comment': comment,
-          for (final item in order.items)
-            'items[${item.id}][rating]': '$rating',
-        }, {
-          if (photos.isNotEmpty && order.items.isNotEmpty)
-            'items[${order.items.first.id}][photos][]': photos,
-        }));
-    if (mounted) showMessage(context, 'Thank you for your review.');
+    // Photos go with the first dish (the order's "what I got" pictures).
+    await _run(() => SessionScope.read(context).api.postMultipart('/orders/${widget.orderId}/review', result.fields(), {
+          if (result.photos.isNotEmpty && items.isNotEmpty) 'items[${items.first.id}][photos][]': result.photos,
+        }), successMessage: 'Thank you for your review.');
   }
 
   @override
@@ -395,7 +424,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       icon: const Icon(Icons.replay),
                       label: const Text('Buy again')),
                   OutlinedButton.icon(
-                      onPressed: () => openLink(context, order.receiptUrl!),
+                      onPressed: () => _showReceipt(order),
                       icon: const Icon(Icons.receipt_outlined),
                       label: const Text('Receipt')),
                   OutlinedButton.icon(
@@ -635,17 +664,44 @@ Widget _riderCard(Map<String, dynamic> rider) {
   );
 }
 
-class _ReviewSheet extends StatefulWidget {
-  const _ReviewSheet();
+/// What the buyer wrote: shop stars and comment, stars per dish, and for food taste, portion and packaging.
+class ReviewInput {
+  ReviewInput({required this.shopRating, required this.comment, required this.items, required this.photos});
 
-  @override
-  State<_ReviewSheet> createState() => _ReviewSheetState();
+  final int shopRating;
+  final String comment;
+
+  /// order item id => {rating, taste, portion, packaging} (food scores may be missing).
+  final Map<int, Map<String, int>> items;
+  final List<PickedPhoto> photos;
+
+  Map<String, String> fields() => {
+        'seller_rating': '$shopRating',
+        if (comment.isNotEmpty) 'seller_comment': comment,
+        for (final entry in items.entries)
+          for (final score in entry.value.entries) 'items[${entry.key}][${score.key}]': '${score.value}',
+      };
 }
 
-class _ReviewSheetState extends State<_ReviewSheet> {
-  int _rating = 5;
+class ReviewSheet extends StatefulWidget {
+  const ReviewSheet({super.key, required this.items, this.isFood = false});
+
+  final List<OrderItem> items;
+
+  /// From a food shop: also taste, portion and packaging.
+  final bool isFood;
+
+  @override
+  State<ReviewSheet> createState() => _ReviewSheetState();
+}
+
+class _ReviewSheetState extends State<ReviewSheet> {
+  int _shop = 5;
   final _comment = TextEditingController();
   List<PickedPhoto> _photos = [];
+  late final Map<int, Map<String, int>> _items = {for (final i in widget.items) i.id: {'rating': 5}};
+
+  static const _food = {'taste': '😋 Taste', 'portion': '🍽 Portion', 'packaging': '📦 Packaging'};
 
   @override
   void dispose() {
@@ -653,40 +709,45 @@ class _ReviewSheetState extends State<_ReviewSheet> {
     super.dispose();
   }
 
+  Widget _stars(int value, ValueChanged<int> onTap, {double size = 34}) => Row(mainAxisSize: MainAxisSize.min, children: [
+        for (var i = 1; i <= 5; i++)
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            iconSize: size,
+            tooltip: '$i star${i > 1 ? 's' : ''}',
+            onPressed: () => setState(() => onTap(i)),
+            icon: Icon(i <= value ? Icons.star : Icons.star_border, color: Colors.amber),
+          ),
+      ]);
+
   @override
   Widget build(BuildContext context) => Padding(
-        padding: EdgeInsets.fromLTRB(
-            20, 20, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
-        child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('How was it?',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 8),
-              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                for (var i = 1; i <= 5; i++)
-                  IconButton(
-                    iconSize: 40,
-                    onPressed: () => setState(() => _rating = i),
-                    icon: Icon(i <= _rating ? Icons.star : Icons.star_border,
-                        color: Colors.amber),
-                  ),
-              ]),
-              TextField(
-                  controller: _comment,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                      hintText: 'Tell others about the seller (optional)')),
-              const SizedBox(height: 10),
-              PhotoPicker(
-                  onChanged: (p) => _photos = p,
-                  label: 'Photos of what you got (optional)'),
-              const SizedBox(height: 14),
-              FilledButton(
-                  onPressed: () => Navigator.pop(
-                      context, (_rating, _comment.text.trim(), _photos)),
-                  child: const Text('Send review')),
-            ]),
+        padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            const Text('How was it?', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            const Text('The shop', style: TextStyle(fontWeight: FontWeight.w700)),
+            _stars(_shop, (v) => _shop = v, size: 38),
+            TextField(controller: _comment, maxLines: 2, decoration: const InputDecoration(hintText: 'Tell others about the shop (optional)')),
+            for (final item in widget.items) ...[
+              const SizedBox(height: 12),
+              Text(item.displayTitle, style: const TextStyle(fontWeight: FontWeight.w700)),
+              _stars(_items[item.id]!['rating']!, (v) => _items[item.id]!['rating'] = v),
+              if (widget.isFood)
+                for (final score in _food.entries)
+                  Row(children: [
+                    SizedBox(width: 110, child: Text(score.value)),
+                    _stars(_items[item.id]![score.key] ?? 0, (v) => _items[item.id]![score.key] = v, size: 24),
+                  ]),
+            ],
+            const SizedBox(height: 10),
+            PhotoPicker(onChanged: (p) => _photos = p, label: 'Photos of what you got (optional)'),
+            const SizedBox(height: 14),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, ReviewInput(shopRating: _shop, comment: _comment.text.trim(), items: _items, photos: _photos)),
+              child: const Text('Send review'),
+            ),
+          ]),
+        ),
       );
 }

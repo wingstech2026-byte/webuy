@@ -33,6 +33,7 @@ class ShopScreen extends StatelessWidget {
               subtitle: Text([
                 if (seller.isVerified) '✓ Verified',
                 seller.location,
+                ...((json['seller_badges'] as List?) ?? const []).whereType<String>(),
                 if (seller.ratingCount > 0) '★ ${seller.ratingAvg.toStringAsFixed(1)} (${seller.ratingCount})',
               ].join(' · ')),
             ),

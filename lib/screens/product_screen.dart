@@ -31,10 +31,26 @@ class ProductDetail {
         addons = ((j['addons'] as List?) ?? const []).whereType<Map<String, dynamic>>().toList(),
         offers = ((j['offers'] as List?) ?? const []).whereType<Map<String, dynamic>>().map((o) => '${o['label']}').toList(),
         bundles = ((j['bundles'] as List?) ?? const []).whereType<Map<String, dynamic>>().toList(),
+        priceHistory = ((j['price_history'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map((point) => (
+                  DateTime.parse(point['recorded_at'] as String),
+                  double.parse(point['price'].toString()),
+                ))
+            .toList(),
+        priceAlert = j['price_alert']?.toString(),
+        stockAlert = j['stock_alert'] == true,
+        canSetStockAlert = j['can_set_stock_alert'] == true,
+        sellerBadges = ((j['seller_badges'] as List?) ?? const []).whereType<String>().toList(),
         foodScores = j['food_scores'] as Map<String, dynamic>?;
 
   /// Food: average taste, portion and packaging ({count, taste, portion, packaging}).
   final Map<String, dynamic>? foodScores;
+  final List<(DateTime, double)> priceHistory;
+  final String? priceAlert;
+  final bool stockAlert;
+  final bool canSetStockAlert;
+  final List<String> sellerBadges;
 
   /// Extras for a dish: {id, name, price}.
   final List<Map<String, dynamic>> addons;
@@ -100,6 +116,78 @@ class _ProductBodyState extends State<_ProductBody> {
   bool _busy = false;
 
   Product get p => widget.data.product;
+  late String? _priceAlert = widget.data.priceAlert;
+
+  late bool _stockAlert = widget.data.stockAlert;
+
+  Future<void> _toggleStockAlert() async {
+    if (!await ensureLoggedIn(context) || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final result = await SessionScope.read(context).api.post(
+        '/products/${p.slug}/stock-alert',
+        {'subscribed': !_stockAlert},
+      ) as Map<String, dynamic>;
+      if (mounted) {
+        setState(() => _stockAlert = result['subscribed'] == true);
+        showMessage(context, _stockAlert ? 'Stock alert saved.' : 'Stock alert removed.');
+      }
+    } on Object catch (error) {
+      if (mounted) showMessage(context, error);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _editPriceAlert() async {
+    if (!await ensureLoggedIn(context) || !mounted) return;
+    var target = _priceAlert ?? '';
+    final formKey = GlobalKey<FormState>();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Price alert'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            initialValue: target,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(labelText: 'Notify me below', prefixText: 'Le '),
+            onChanged: (value) => target = value.trim(),
+            validator: (_) => RegExp(r'^\d{1,12}(\.\d{1,2})?$').hasMatch(target) &&
+                    (double.tryParse(target) ?? 0) > 0
+                ? null
+                : 'Enter a valid amount above zero.',
+          ),
+        ),
+        actions: [
+          if (_priceAlert != null)
+            TextButton(onPressed: () => Navigator.pop(context, ''), child: const Text('Remove')),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) Navigator.pop(context, target);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (result == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final target = result.isEmpty ? null : result;
+      await SessionScope.read(context).api.post('/products/${p.slug}/price-alert', {'target': target});
+      if (mounted) {
+        setState(() => _priceAlert = target);
+        showMessage(context, target == null ? 'Price alert removed.' : 'Price alert saved.');
+      }
+    } on Object catch (error) {
+      if (mounted) showMessage(context, error);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   /// The price for this quantity: the best tier reached, else the normal price. Display only;
   /// the server prices the cart and the checkout.
@@ -542,6 +630,30 @@ class _ProductBodyState extends State<_ProductBody> {
                   icon: const Text('🧪'),
                   label: const Text('Free trial: apply to test it'),
                 ),
+              if (widget.data.canSetStockAlert || _stockAlert)
+                TextButton.icon(
+                  onPressed: _busy ? null : _toggleStockAlert,
+                  icon: Icon(_stockAlert ? Icons.notifications_off_outlined : Icons.notifications_active_outlined),
+                  label: Text(_stockAlert ? 'Remove stock alert' : 'Notify me when back in stock'),
+                ),
+              if (widget.data.priceHistory.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                const Text('Base price history (90 days)', style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 64,
+                  child: CustomPaint(
+                    painter: _PriceHistoryPainter(widget.data.priceHistory, Theme.of(context).colorScheme.primary),
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+                Text('Current base price: ${formatLe(p.price)}'),
+              ],
+              TextButton.icon(
+                onPressed: _busy ? null : _editPriceAlert,
+                icon: const Icon(Icons.notifications_none),
+                label: Text(_priceAlert == null ? 'Set price alert' : 'Alert below ${formatLe(_priceAlert)}'),
+              ),
               if (p.seller != null) ...[
                 const Divider(height: 28),
                 ListTile(
@@ -557,6 +669,11 @@ class _ProductBodyState extends State<_ProductBody> {
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(
                       builder: (_) => ShopScreen(slug: p.seller!.slug))),
                 ),
+                if (widget.data.sellerBadges.isNotEmpty)
+                  Wrap(
+                    spacing: 8,
+                    children: [for (final badge in widget.data.sellerBadges) Chip(label: Text(badge))],
+                  ),
                 TextButton.icon(
                   onPressed: () => openChatWith(context,
                       userId: p.seller!.userId, title: p.seller!.shopName),
@@ -683,4 +800,38 @@ class _ProductBodyState extends State<_ProductBody> {
 
     return '${total ~/ 100}.${(total % 100).toString().padLeft(2, '0')}';
   }
+}
+
+class _PriceHistoryPainter extends CustomPainter {
+  const _PriceHistoryPainter(this.points, this.color);
+
+  final List<(DateTime, double)> points;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final prices = points.map((point) => point.$2);
+    final low = prices.reduce((a, b) => a < b ? a : b);
+    final high = prices.reduce((a, b) => a > b ? a : b);
+    final now = DateTime.now();
+    final start = now.subtract(const Duration(days: 90));
+    final duration = now.difference(start).inMilliseconds;
+    final path = Path();
+    for (var index = 0; index < points.length; index++) {
+      final (recordedAt, price) = points[index];
+      final x = size.width * (recordedAt.difference(start).inMilliseconds / duration).clamp(0, 1);
+      final y = low == high ? size.height / 2 : 2 + (size.height - 4) * (high - price) / (high - low);
+      if (index == 0) {
+        path.moveTo(x, y);
+      }
+      path.lineTo(x, y);
+      path.lineTo(size.width * ((index + 1 < points.length ? points[index + 1].$1 : now)
+          .difference(start).inMilliseconds / duration).clamp(0, 1), y);
+    }
+    canvas.drawPath(path, Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = 2);
+  }
+
+  @override
+  bool shouldRepaint(_PriceHistoryPainter oldDelegate) =>
+      oldDelegate.points != points || oldDelegate.color != color;
 }

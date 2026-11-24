@@ -105,7 +105,11 @@ class Seller {
     this.userId,
     this.freeDeliveryFrom,
     this.holidayNotice,
+    this.isInstant = false,
   });
+
+  /// A food shop with instant delivery (reviews also ask taste, portion, packaging).
+  final bool isInstant;
 
   /// The shop pays delivery for orders from this amount (null: no offer).
   final String? freeDeliveryFrom;
@@ -127,6 +131,7 @@ class Seller {
         reliabilityScore: (j['reliability_score'] as num?)?.toInt(),
         freeDeliveryFrom: j['free_delivery_from'] as String?,
         holidayNotice: j['holiday_notice'] as String?,
+        isInstant: j['is_instant'] == true,
         userId: (j['user_id'] as num?)?.toInt(),
       );
 
@@ -742,6 +747,9 @@ class Order {
     this.canCancel = false,
     this.repeatEveryDays,
     this.receiptUrl,
+    this.shopDiscount = '0.00',
+    this.riderTip = '0.00',
+    this.isInstant = false,
     required this.reportProblemUrl,
     this.seller,
     this.district,
@@ -792,6 +800,9 @@ class Order {
         canCancel: j['can_cancel'] == true,
         repeatEveryDays: (j['repeat_every_days'] as num?)?.toInt(),
         receiptUrl: j['receipt_url'] as String?,
+        shopDiscount: _s(j['shop_discount'] ?? '0.00'),
+        riderTip: _s(j['rider_tip'] ?? '0.00'),
+        isInstant: j['is_instant'] == true,
         reportProblemUrl: _s(j['report_problem_url']),
         district: j['district'] as String?,
         address: j['address'] as String?,
@@ -831,6 +842,9 @@ class Order {
   final Map<String, dynamic>? collectStation;
 
   /// The total minus coupons and WiBuy Pass savings (paid by WiBuy).
+  final String shopDiscount;
+  final String riderTip;
+  final bool isInstant;
   final String amountPaid;
   final String discount;
 

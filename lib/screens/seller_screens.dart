@@ -9,6 +9,7 @@ import '../theme.dart';
 import '../util/money.dart';
 import '../widgets/common.dart';
 import '../widgets/photo_picker.dart';
+import 'seller_settings_screen.dart';
 
 /// "My shop": the seller's overview, with orders, products, earnings and quote requests.
 class SellerHomeScreen extends StatefulWidget {
@@ -81,7 +82,8 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
                   'Products',
                   '${d['product_count']} products${(d['low_stock'] as List).isNotEmpty ? ' · ${(d['low_stock'] as List).length} low on stock' : ''}',
                   () => _open(const SellerProductsScreen())),
-              _Tile(
+              if (money != null)
+                _Tile(
                   Icons.bar_chart,
                   'Sales report',
                   'Best sellers, sales by week, low stock',
@@ -97,6 +99,13 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
                   'Quote requests',
                   '${d['open_rfqs']} open request(s) from buyers',
                   () => _open(const SellerRfqsScreen())),
+              _Tile(Icons.question_answer_outlined, 'Product questions',
+                  'Answer buyers and hide questions',
+                  () => _open(const SellerQuestionsScreen())),
+              if (d['is_owner'] == true)
+                _Tile(Icons.settings_outlined, 'Shop settings',
+                    'Holiday mode and helpers',
+                    () => _open(const SellerSettingsScreen())),
             ]),
           );
         },
